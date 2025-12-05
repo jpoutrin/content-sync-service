@@ -74,13 +74,19 @@ class Command(BaseCommand):
                     details = service.get_channel_details(channel_id=identifier)
                 # If it's a username/handle
                 else:
-                    # Try as username first
-                    details = service.get_channel_details(for_username=identifier)
+                    self.stdout.write(f"   Trying handle lookup for: @{identifier}")
+                    # Try as handle first (most common nowadays)
+                    details = service.get_channel_details(for_handle=identifier)
+                    
+                    if not details:
+                        self.stdout.write(f"   ⚠️ Handle lookup failed, trying legacy username: {identifier}")
+                        # Fallback to legacy username
+                        details = service.get_channel_details(for_username=identifier)
                     
                     # If that fails, it might be a custom URL - we need the channel ID
                     if not details:
                         self.stdout.write(self.style.WARNING(
-                            f"⚠️  Could not find channel with username '{identifier}'"
+                            f"⚠️  Could not find channel with handle/username '{identifier}'"
                         ))
                         self.stdout.write("   Please provide the channel ID (starts with UC) instead")
                         self.stdout.write("   You can find it in the channel's 'About' page URL")

@@ -1,11 +1,16 @@
 from django.contrib import admin
-from .models import Source, Video, ProcessedContent
+from django.contrib.auth.admin import UserAdmin
+from .models import Source, Video, ProcessedContent, User
+
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    pass
 
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):
-    list_display = ('title', 'type', 'user_id', 'status', 'last_sync_at', 'created_at')
+    list_display = ('title', 'type', 'user', 'status', 'last_sync_at', 'created_at')
     list_filter = ('type', 'status', 'created_at')
-    search_fields = ('title', 'youtube_id', 'user_id')
+    search_fields = ('title', 'youtube_id', 'user__username')
     readonly_fields = ('id', 'created_at', 'updated_at')
 
 @admin.register(Video)

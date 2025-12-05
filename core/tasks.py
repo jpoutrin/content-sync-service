@@ -102,10 +102,11 @@ def extract_transcript_task(video_id):
         logger.info(f"Extracting transcript for video: {video.title}")
         
         transcript_service = TranscriptService()
-        transcript_text = transcript_service.get_transcript(video.youtube_video_id)
+        transcript_result = transcript_service.get_transcript(video.youtube_video_id)
         
-        if transcript_text:
-            video.transcript_text = transcript_text
+        if transcript_result:
+            video.transcript_text = transcript_result['text']
+            video.transcript_data = transcript_result['data']
             video.transcript_status = Video.ProcessingStatus.COMPLETED
             logger.info(f"Successfully extracted transcript for {video.title}")
         else:
@@ -116,7 +117,7 @@ def extract_transcript_task(video_id):
         
         return {
             'video_id': str(video_id),
-            'transcript_text': transcript_text
+            'transcript_text': transcript_result['text'] if transcript_result else None
         }
         
     except Video.DoesNotExist:
@@ -127,6 +128,7 @@ def extract_transcript_task(video_id):
         try:
             video = Video.objects.get(id=video_id)
             video.transcript_status = Video.ProcessingStatus.FAILED
+            video.processing_error = f"Transcript Extraction: {str(e)}"
             video.save()
         except:
             pass
@@ -140,6 +142,9 @@ def generate_summary_task(transcript_data):
     """
     if not transcript_data or not transcript_data.get('transcript_text'):
         logger.warning("No transcript data to process")
+        # We need to know WHICH video failed if possible, but transcript_data might be None
+        # However, save_results_task will handle the missing result.
+        # Ideally, we pass video_id even on failure, but chained tasks make this tricky if previous returned None.
         return None
     
     video_id = transcript_data['video_id']
@@ -177,6 +182,7 @@ def generate_summary_task(transcript_data):
         try:
             video = Video.objects.get(id=video_id)
             video.ai_analysis_status = Video.ProcessingStatus.FAILED
+            video.processing_error = f"AI Summary: {str(e)}"
             video.save()
         except:
             pass
@@ -189,6 +195,15 @@ def save_results_task(summary_result, video_id):
     """
     if not summary_result or not summary_result.get('summary_data'):
         logger.warning(f"No summary data to save for video {video_id}")
+        try:
+            video = Video.objects.get(id=video_id)
+            if video.ai_analysis_status != Video.ProcessingStatus.FAILED:
+                # If status isn't FAILED, but we have no data, something happened in between
+                video.processing_error = "Save Results: No summary data received from previous step."
+                video.ai_analysis_status = Video.ProcessingStatus.FAILED
+                video.save()
+        except:
+            pass
         return
     
     try:
@@ -213,3 +228,9 @@ def save_results_task(summary_result, video_id):
         logger.error(f"Video {video_id} not found")
     except Exception as e:
         logger.error(f"Error saving results for {video_id}: {str(e)}")
+        try:
+            video = Video.objects.get(id=video_id)
+            video.processing_error = f"Save Results: {str(e)}"
+            video.save()
+        except:
+            pass

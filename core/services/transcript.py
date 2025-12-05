@@ -11,27 +11,85 @@ class TranscriptService:
         Returns the transcript text or None if not found.
         """
         try:
-            # Create API instance and fetch transcript
+            # Use instance method as seen in library source
             api = YouTubeTranscriptApi()
+            # fetch() returns a FetchedTranscript object which is iterable
             transcript_list = api.fetch(video_id, languages=['en'])
             
             if not transcript_list:
                 logger.warning(f"No transcript found for video {video_id}")
                 return None
 
-            # Combine into a single string
-            full_text = " ".join([entry.text for entry in transcript_list])
-            return full_text
+            # Convert to list of dicts
+            transcript_data = []
+            full_text_parts = []
+            
+            for entry in transcript_list:
+                # Handle both object attributes and dict access just to be safe
+                if hasattr(entry, 'text'):
+                    text = entry.text
+                    start = entry.start
+                    duration = entry.duration
+                elif isinstance(entry, dict):
+                    text = entry.get('text', '')
+                    start = entry.get('start', 0)
+                    duration = entry.get('duration', 0)
+                else:
+                    # Fallback or skip
+                    continue
+                
+                transcript_data.append({
+                    'text': text,
+                    'start': start,
+                    'duration': duration
+                })
+                full_text_parts.append(text)
+
+            full_text = " ".join(full_text_parts)
+            
+            return {
+                'text': full_text,
+                'data': transcript_data
+            }
 
         except Exception as e:
             logger.error(f"Error fetching transcript for {video_id}: {e}")
-            # Try without language specification as fallback
+            
+            # Fallback: try listing all and picking first
             try:
                 api = YouTubeTranscriptApi()
-                transcript_list = api.fetch(video_id)
-                if transcript_list:
-                    full_text = " ".join([entry.text for entry in transcript_list])
-                    return full_text
+                # Use .list() instance method
+                transcript_list_obj = api.list(video_id)
+                # Just take the first available transcript
+                for transcript in transcript_list_obj:
+                    fetched_data = transcript.fetch()
+                    
+                    transcript_data = []
+                    full_text_parts = []
+                    for entry in fetched_data:
+                        if hasattr(entry, 'text'):
+                            text = entry.text
+                            start = entry.start
+                            duration = entry.duration
+                        elif isinstance(entry, dict):
+                            text = entry.get('text', '')
+                            start = entry.get('start', 0)
+                            duration = entry.get('duration', 0)
+                        else:
+                            continue
+                            
+                        transcript_data.append({
+                            'text': text,
+                            'start': start,
+                            'duration': duration
+                        })
+                        full_text_parts.append(text)
+                    
+                    full_text = " ".join(full_text_parts)
+                    return {
+                        'text': full_text,
+                        'data': transcript_data
+                    }
             except Exception as e2:
                 logger.error(f"Fallback also failed for {video_id}: {e2}")
             return None

@@ -12,22 +12,29 @@ class YouTubeService:
         self.api_key = settings.YOUTUBE_API_KEY
         self.youtube = build('youtube', 'v3', developerKey=self.api_key)
 
-    def get_channel_details(self, channel_id=None, for_username=None):
+    def get_channel_details(self, channel_id=None, for_username=None, for_handle=None):
         """
         Get channel details including the uploads playlist ID.
+        Supports lookup by channel_id, legacy username, or proper handle.
         """
         try:
             kwargs = {'part': 'contentDetails,snippet'}
             if channel_id:
                 kwargs['id'] = channel_id
+            elif for_handle:
+                # IMPORTANT: Handles must include the '@' symbol
+                if not for_handle.startswith('@'):
+                    for_handle = f'@{for_handle}'
+                kwargs['forHandle'] = for_handle
             elif for_username:
                 kwargs['forUsername'] = for_username
             else:
-                raise ValueError("Must provide channel_id or for_username")
+                raise ValueError("Must provide channel_id, for_handle, or for_username")
 
             response = self.youtube.channels().list(**kwargs).execute()
 
-            if not response['items']:
+            if not response.get('items'):
+                logger.warning(f"No channels found for params: {kwargs}")
                 return None
 
             item = response['items'][0]

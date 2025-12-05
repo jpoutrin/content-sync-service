@@ -53,6 +53,7 @@ class Video(models.Model):
     published_at = models.DateTimeField()
     
     transcript_text = models.TextField(blank=True, null=True)
+    transcript_data = models.JSONField(default=list, blank=True, null=True)
     transcript_status = models.CharField(
         max_length=20, 
         choices=ProcessingStatus.choices, 
@@ -63,6 +64,8 @@ class Video(models.Model):
         choices=ProcessingStatus.choices, 
         default=ProcessingStatus.PENDING
     )
+    
+    processing_error = models.TextField(blank=True, null=True, help_text="Last processing error message")
     
     created_at = models.DateTimeField(auto_now_add=True)
 
