@@ -1,0 +1,215 @@
+from celery import shared_task, chain
+from django.utils import timezone
+from .models import Source, Video, ProcessedContent
+from .services.youtube import YouTubeService
+from .services.transcript import TranscriptService
+from .services.llm import LLMService
+import logging
+
+logger = logging.getLogger(__name__)
+
+@shared_task
+def sync_sources_task():
+    """
+    Periodic task to iterate through active sources and dispatch fetch tasks.
+    """
+    active_sources = Source.objects.filter(status=Source.Status.ACTIVE)
+    for source in active_sources:
+        fetch_source_videos_task.delay(str(source.id))
+
+@shared_task
+def fetch_source_videos_task(source_id):
+    """
+    Fetches latest videos from YouTube for a given source.
+    """
+    try:
+        source = Source.objects.get(id=source_id)
+        logger.info(f"Fetching videos for source: {source.title}")
+        
+        youtube_service = YouTubeService()
+        
+        playlist_id = None
+        if source.type == Source.SourceType.CHANNEL:
+            details = youtube_service.get_channel_details(channel_id=source.youtube_id)
+            if details:
+                playlist_id = details['uploads_playlist_id']
+        else:
+            playlist_id = source.youtube_id
+            
+        if not playlist_id:
+            logger.error(f"Could not determine playlist ID for source {source.id}")
+            return
+
+        videos = youtube_service.get_playlist_videos(playlist_id)
+        
+        new_videos_count = 0
+        for video_data in videos:
+            video, created = Video.objects.get_or_create(
+                youtube_video_id=video_data['youtube_id'],
+                defaults={
+                    'source': source,
+                    'title': video_data['title'],
+                    'url': video_data['url'],
+                    'duration': video_data['duration'],
+                    'published_at': video_data['published_at'],
+                    'transcript_status': Video.ProcessingStatus.PENDING,
+                    'ai_analysis_status': Video.ProcessingStatus.PENDING
+                }
+            )
+            
+            if created:
+                new_videos_count += 1
+                logger.info(f"Found new video: {video.title}")
+                process_video_pipeline_task.delay(str(video.id))
+        
+        source.last_sync_at = timezone.now()
+        source.save()
+        
+        logger.info(f"Sync complete for {source.title}. Added {new_videos_count} new videos.")
+        
+    except Source.DoesNotExist:
+        logger.error(f"Source {source_id} not found")
+    except Exception as e:
+        logger.error(f"Error syncing source {source_id}: {str(e)}")
+
+@shared_task
+def process_video_pipeline_task(video_id):
+    """
+    Orchestrates the processing pipeline for a video.
+    Chains: extract_transcript -> generate_summary -> save_results
+    """
+    logger.info(f"Starting processing pipeline for video {video_id}")
+    
+    # Chain the tasks together
+    workflow = chain(
+        extract_transcript_task.s(video_id),
+        generate_summary_task.s(),
+        save_results_task.s(video_id)
+    )
+    workflow.apply_async()
+
+@shared_task
+def extract_transcript_task(video_id):
+    """
+    Extracts transcript from a YouTube video.
+    Returns: dict with video_id and transcript_text
+    """
+    try:
+        video = Video.objects.get(id=video_id)
+        video.transcript_status = Video.ProcessingStatus.PROCESSING
+        video.save()
+        
+        logger.info(f"Extracting transcript for video: {video.title}")
+        
+        transcript_service = TranscriptService()
+        transcript_text = transcript_service.get_transcript(video.youtube_video_id)
+        
+        if transcript_text:
+            video.transcript_text = transcript_text
+            video.transcript_status = Video.ProcessingStatus.COMPLETED
+            logger.info(f"Successfully extracted transcript for {video.title}")
+        else:
+            video.transcript_status = Video.ProcessingStatus.FAILED
+            logger.warning(f"No transcript available for {video.title}")
+        
+        video.save()
+        
+        return {
+            'video_id': str(video_id),
+            'transcript_text': transcript_text
+        }
+        
+    except Video.DoesNotExist:
+        logger.error(f"Video {video_id} not found")
+        return None
+    except Exception as e:
+        logger.error(f"Error extracting transcript for {video_id}: {str(e)}")
+        try:
+            video = Video.objects.get(id=video_id)
+            video.transcript_status = Video.ProcessingStatus.FAILED
+            video.save()
+        except:
+            pass
+        return None
+
+@shared_task
+def generate_summary_task(transcript_data):
+    """
+    Generates AI summary from transcript.
+    Returns: dict with video_id, transcript_text, and summary_data
+    """
+    if not transcript_data or not transcript_data.get('transcript_text'):
+        logger.warning("No transcript data to process")
+        return None
+    
+    video_id = transcript_data['video_id']
+    transcript_text = transcript_data['transcript_text']
+    
+    try:
+        video = Video.objects.get(id=video_id)
+        video.ai_analysis_status = Video.ProcessingStatus.PROCESSING
+        video.save()
+        
+        logger.info(f"Generating AI summary for video: {video.title}")
+        
+        llm_service = LLMService()
+        summary_data = llm_service.generate_summary(transcript_text)
+        
+        if summary_data:
+            video.ai_analysis_status = Video.ProcessingStatus.COMPLETED
+            logger.info(f"Successfully generated summary for {video.title}")
+        else:
+            video.ai_analysis_status = Video.ProcessingStatus.FAILED
+            logger.warning(f"Failed to generate summary for {video.title}")
+        
+        video.save()
+        
+        return {
+            'video_id': video_id,
+            'summary_data': summary_data
+        }
+        
+    except Video.DoesNotExist:
+        logger.error(f"Video {video_id} not found")
+        return None
+    except Exception as e:
+        logger.error(f"Error generating summary for {video_id}: {str(e)}")
+        try:
+            video = Video.objects.get(id=video_id)
+            video.ai_analysis_status = Video.ProcessingStatus.FAILED
+            video.save()
+        except:
+            pass
+        return None
+
+@shared_task
+def save_results_task(summary_result, video_id):
+    """
+    Saves the processed results to the database.
+    """
+    if not summary_result or not summary_result.get('summary_data'):
+        logger.warning(f"No summary data to save for video {video_id}")
+        return
+    
+    try:
+        video = Video.objects.get(id=video_id)
+        summary_data = summary_result['summary_data']
+        
+        # Create or update ProcessedContent
+        ProcessedContent.objects.update_or_create(
+            video=video,
+            defaults={
+                'summary': summary_data.get('summary', ''),
+                'tags': summary_data.get('tags', []),
+                'categories': summary_data.get('categories', []),
+                'main_ideas': summary_data.get('main_ideas', []),
+                'key_moments': summary_data.get('key_moments', [])
+            }
+        )
+        
+        logger.info(f"Successfully saved processed content for {video.title}")
+        
+    except Video.DoesNotExist:
+        logger.error(f"Video {video_id} not found")
+    except Exception as e:
+        logger.error(f"Error saving results for {video_id}: {str(e)}")
