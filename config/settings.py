@@ -121,6 +121,9 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Custom User Model with UUID primary key
+AUTH_USER_MODEL = 'core.User'
+
 # Celery Configuration
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6380/0')
 CELERY_RESULT_BACKEND = 'django-db'

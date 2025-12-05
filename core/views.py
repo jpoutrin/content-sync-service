@@ -9,18 +9,18 @@ class SourceViewSet(viewsets.ModelViewSet):
     serializer_class = SourceSerializer
 
     def get_queryset(self):
-        # Filter sources by the authenticated user's ID (stored in username)
-        return Source.objects.filter(user_id=self.request.user.username)
+        # Filter sources by the authenticated user
+        return Source.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        # Automatically set the user_id from the authenticated user
-        serializer.save(user_id=self.request.user.username)
+        # Automatically set the user from the authenticated user
+        serializer.save(user=self.request.user)
 
 class VideoViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = VideoSerializer
 
     def get_queryset(self):
-        queryset = Video.objects.filter(source__user_id=self.request.user.username)
+        queryset = Video.objects.filter(source__user=self.request.user)
         
         # Filter by source_id
         source_id = self.request.query_params.get('source_id')

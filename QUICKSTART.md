@@ -55,7 +55,14 @@ open http://localhost:10039/admin/
 
 ### 2. Add a YouTube Source
 ```bash
-.venv/bin/python manage.py add_source "UC_x5XG1OV2P6uZZ5FSM9Ttw" "test-user-uuid"
+# Playlist
+.venv/bin/python manage.py add_source "https://www.youtube.com/playlist?list=PLxxx" "admin"
+
+# Channel (with @ handle)
+.venv/bin/python manage.py add_source "https://www.youtube.com/@channelname" "admin"
+
+# Channel (with ID)
+.venv/bin/python manage.py add_source "https://www.youtube.com/channel/UCxxx" "admin"
 ```
 
 ### 3. Test the Pipeline

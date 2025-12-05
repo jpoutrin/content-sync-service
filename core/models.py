@@ -1,6 +1,10 @@
 import uuid
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from .user_model import User
+
+# Export User for easy importing
+__all__ = ['User', 'Source', 'Video', 'ProcessedContent']
 
 class Source(models.Model):
     class SourceType(models.TextChoices):
@@ -13,7 +17,7 @@ class Source(models.Model):
         PAUSED = 'PAUSED', _('Paused')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user_id = models.UUIDField(help_text="Supabase Auth User ID")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sources')
     type = models.CharField(max_length=20, choices=SourceType.choices, default=SourceType.CHANNEL)
     youtube_id = models.CharField(max_length=100)
     title = models.CharField(max_length=255)
@@ -25,9 +29,9 @@ class Source(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('user_id', 'youtube_id')
+        unique_together = ('user', 'youtube_id')
         indexes = [
-            models.Index(fields=['user_id', 'status']),
+            models.Index(fields=['user', 'status']),
         ]
 
     def __str__(self):
