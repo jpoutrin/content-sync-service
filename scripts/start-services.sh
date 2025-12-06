@@ -41,17 +41,7 @@ else
 fi
 echo ""
 
-# 1b. Start Flower (Celery Monitor)
-echo "🌸 Starting Flower (Celery Monitor)..."
-FLOWER_PORT=${FLOWER_PORT:-10040}
-docker-compose up -d flower
-sleep 2
-if curl -s http://localhost:$FLOWER_PORT > /dev/null 2>&1; then
-    echo -e "${GREEN}✓${NC} Flower started successfully on port $FLOWER_PORT"
-else
-    echo -e "${YELLOW}⚠${NC}  Flower may still be starting..."
-fi
-echo ""
+
 
 # 2. Start Supabase Database
 echo "🗄️  Starting Supabase Database..."
@@ -66,7 +56,7 @@ echo ""
 # 3. Get available port for Django
 echo "🔍 Finding available port for Django..."
 if command_exists portman; then
-    DJANGO_PORT=$(portman book 8001 | awk '{print $2}')
+    DJANGO_PORT=$(portman get content-sync-service | awk '{print $2}')
     echo -e "${GREEN}✓${NC} Reserved port: $DJANGO_PORT"
 else
     DJANGO_PORT=10039
@@ -108,9 +98,7 @@ echo "🎨 Django Admin:"
 echo "   → http://localhost:$DJANGO_PORT/admin/"
 echo "   Login: admin / admin123"
 echo ""
-echo "🌸 Flower (Celery Monitor):"
-echo "   → http://localhost:${FLOWER_PORT:-10040}/"
-echo ""
+
 echo "📡 API Endpoints:"
 echo "   → http://localhost:$DJANGO_PORT/api/sources/"
 echo "   → http://localhost:$DJANGO_PORT/api/videos/"
@@ -128,8 +116,10 @@ echo ""
 echo "1. Start Django server (if not running):"
 echo "   .venv/bin/python manage.py runserver $DJANGO_PORT"
 echo ""
-echo "2. Start Celery worker (for background tasks):"
-echo "   celery -A config worker -l info"
+
+
+echo "2. Start Django Q Cluster (for background tasks & daily sync):"
+echo "   .venv/bin/python manage.py qcluster"
 echo ""
 echo "3. Access Django Admin:"
 echo "   open http://localhost:$DJANGO_PORT/admin/"

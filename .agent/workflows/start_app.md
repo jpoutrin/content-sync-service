@@ -17,7 +17,7 @@ This workflow starts the entire application stack.
    ```bash
    # You should run this in a separate terminal
    # uv run celery -A config worker -l info
-   echo "Please start the Celery worker in a new terminal: uv run celery -A config worker -l info"
+   echo "Please start the Celery worker in a new terminal: uv run celery -A config worker -B -l info"
    ```
 
 3. **Start Django Server**
