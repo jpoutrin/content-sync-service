@@ -34,10 +34,11 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'corsheaders',
-    'django_celery_results',
+    'django_q',
     
     # Local
-    'core',
+    'yt_sync',
+    'rag',
 ]
 
 MIDDLEWARE = [
@@ -122,15 +123,22 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom User Model with UUID primary key
-AUTH_USER_MODEL = 'core.User'
+# Custom User Model with UUID primary key
+AUTH_USER_MODEL = 'yt_sync.User'
 
-# Celery Configuration
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6380/0')
-CELERY_RESULT_BACKEND = 'django-db'
-CELERY_ACCEPT_CONTENT = ['application/json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
+# Django Q Configuration
+Q_CLUSTER = {
+    'name': 'DjangORM',
+    'workers': 4,
+    'recycle': 500,
+    'timeout': 60,
+    'compress': True,
+    'save_limit': 250,
+    'queue_limit': 500,
+    'cpu_affinity': 1,
+    'label': 'Django Q',
+    'redis': env('CELERY_BROKER_URL', default='redis://localhost:6380/0'), # Reuse the redis URL env var
+}
 
 # Supabase Configuration
 SUPABASE_URL = env('SUPABASE_URL', default='')
@@ -144,7 +152,7 @@ ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
 # REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'core.authentication.SupabaseAuthentication',
+        'yt_sync.authentication.SupabaseAuthentication',
         'rest_framework.authentication.SessionAuthentication', 
     ],
     'DEFAULT_PERMISSION_CLASSES': [
