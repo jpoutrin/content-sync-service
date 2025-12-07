@@ -36,7 +36,7 @@ db.sqlite3-journal
 
 # Environment variables
 .env
-.envrc
+.env.local
 
 # IDE
 .vscode/
