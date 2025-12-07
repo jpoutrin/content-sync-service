@@ -1,0 +1,14 @@
+# Generated prompts and scripts (regenerate with /parallel-decompose)
+*/prompts/
+*/scripts/
+
+# Integration reports
+*/integration-report.md
+
+# Keep tracked:
+# - manifest.json (regeneration metadata)
+# - context.md (shared context)
+# - tasks/ (task specifications)
+# - contracts/ (shared types & API)
+# - architecture.md (system design)
+# - task-graph.md (dependencies)
