@@ -1,32 +1,9 @@
+# docker-compose.yml is now minimal
+# We use Supabase for the database (local or cloud)
+# To run Supabase locally: `npx supabase start`
+#
+# Django-Q uses the ORM backend (no Redis required)
+
 version: '3.8'
 
-services:
-  # Redis is needed for Celery
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6380:6379"
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # Flower for Celery monitoring
-  flower:
-    image: mher/flower:2.0
-    command: celery --broker=redis://redis:6379/0 flower --port=5555
-    ports:
-      - "${FLOWER_PORT:-10040}:5555"
-    environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-    depends_on:
-      - redis
-    healthcheck:
-      test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5555/" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-  # We removed the 'db' service because we use Supabase (Local or Cloud)
-  # To run Supabase locally: `npx supabase start`
+services: {}

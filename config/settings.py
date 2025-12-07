@@ -126,7 +126,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Custom User Model with UUID primary key
 AUTH_USER_MODEL = 'yt_sync.User'
 
-# Django Q Configuration
+# Django Q Configuration (using ORM backend - no Redis required)
 Q_CLUSTER = {
     'name': 'DjangORM',
     'workers': 4,
@@ -137,7 +137,7 @@ Q_CLUSTER = {
     'queue_limit': 500,
     'cpu_affinity': 1,
     'label': 'Django Q',
-    'redis': env('CELERY_BROKER_URL', default='redis://localhost:6380/0'), # Reuse the redis URL env var
+    'orm': 'default',  # Use Django ORM as broker
 }
 
 # Supabase Configuration

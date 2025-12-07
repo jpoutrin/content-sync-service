@@ -25,25 +25,7 @@ port_in_use() {
     lsof -i :"$1" >/dev/null 2>&1
 }
 
-# 1. Start Redis
-echo "📦 Starting Redis..."
-if docker ps | grep -q content-sync-service-redis-1; then
-    echo -e "${GREEN}✓${NC} Redis is already running"
-else
-    docker-compose up -d redis
-    sleep 2
-    if docker exec content-sync-service-redis-1 redis-cli ping | grep -q PONG; then
-        echo -e "${GREEN}✓${NC} Redis started successfully on port 6380"
-    else
-        echo -e "${RED}✗${NC} Redis failed to start"
-        exit 1
-    fi
-fi
-echo ""
-
-
-
-# 2. Start Supabase Database
+# 1. Start Supabase Database
 echo "🗄️  Starting Supabase Database..."
 if port_in_use 54322; then
     echo -e "${GREEN}✓${NC} Database is already running on port 54322"
@@ -53,7 +35,7 @@ else
 fi
 echo ""
 
-# 3. Get available port for Django
+# 2. Get available port for Django
 echo "🔍 Finding available port for Django..."
 if command_exists portman; then
     DJANGO_PORT=$(portman get content-sync-service | awk '{print $2}')
@@ -64,18 +46,18 @@ else
 fi
 echo ""
 
-# 4. Check if Django is already running
+# 3. Check if Django is already running
 if port_in_use $DJANGO_PORT; then
     echo -e "${YELLOW}⚠${NC}  Django server is already running on port $DJANGO_PORT"
     echo ""
 else
-    # 5. Run migrations
+    # 4. Run migrations
     echo "🔄 Running database migrations..."
     .venv/bin/python manage.py migrate --noinput
     echo -e "${GREEN}✓${NC} Migrations complete"
     echo ""
 
-    # 6. Create superuser if needed
+    # 5. Create superuser if needed
     echo "👤 Checking for superuser..."
     if .venv/bin/python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); exit(0 if User.objects.filter(username='admin').exists() else 1)" 2>/dev/null; then
         echo -e "${GREEN}✓${NC} Superuser 'admin' already exists"
@@ -86,7 +68,7 @@ else
     echo ""
 fi
 
-# 7. Display status
+# 6. Display status
 echo "=================================="
 echo "✅ All Services Running!"
 echo "=================================="
@@ -105,9 +87,6 @@ echo "   → http://localhost:$DJANGO_PORT/api/videos/"
 echo ""
 echo "🗄️  PostgreSQL Database:"
 echo "   → postgresql://postgres:postgres@localhost:54322/postgres"
-echo ""
-echo "📦 Redis:"
-echo "   → localhost:6380"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""

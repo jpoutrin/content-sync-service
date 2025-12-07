@@ -13,13 +13,8 @@ if lsof -i :10039 >/dev/null 2>&1; then
     echo "✓ Django stopped"
 fi
 
-# Stop Celery workers (if running)
-pkill -f "celery.*worker" 2>/dev/null && echo "✓ Celery workers stopped" || true
-
-# Stop Redis
-echo "Stopping Redis..."
-docker-compose stop redis
-echo "✓ Redis stopped"
+# Stop Django Q workers (if running)
+pkill -f "python.*qcluster" 2>/dev/null && echo "✓ Django Q workers stopped" || true
 
 # Stop Supabase
 echo "Stopping Supabase..."
