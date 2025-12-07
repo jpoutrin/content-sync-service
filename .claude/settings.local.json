@@ -1,10 +1,14 @@
 {
   "permissions": {
     "allow": [
+      "Bash(git branch:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git worktree:*)",
       "Bash(mkdir:*)",
-      "Bash(python manage.py startapp:*)",
-      "Bash(source .venv/bin/activate)",
-      "Bash(find:*)",
+      "Bash(chmod:*)",
+      "Bash(./parallel/TS-0001-rag-acl-management/scripts/run-parallel.sh:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)"
     ],

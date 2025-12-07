@@ -6,7 +6,7 @@ Django-based content synchronization service.
 ## Tech Stack
 - **Framework**: Django
 - **Database**: PostgreSQL (via Supabase)
-- **Task Queue**: Celery / Django-Q
+- **Task Queue**: Django-Q (ORM backend)
 - **Python Version**: 3.12
 
 ## Project Structure
@@ -47,7 +47,19 @@ python manage.py test
 - Keep functions focused and small
 
 ## Parallel Development
-This project is set up for parallel multi-agent development.
+
+This project uses parallel multi-agent development. Artifacts are in `parallel/`.
+
+- Each Tech Spec decomposition creates `parallel/TS-XXXX-{slug}/`
+- Task files use compact YAML format for token efficiency
+- Contracts are shared via `contracts/` subdirectory
+- Legacy artifacts remain in `.claude/` for reference
+
+### Commands
+- `/parallel-decompose <prd> --tech-spec <ts-file>` - Decompose PRD into tasks
+- `/parallel-integrate --parallel-dir <dir>` - Verify integration
+- `/parallel-ready-django` - Assess parallelization readiness
+
+### References
 - See `.claude/architecture.md` for system design
 - See `.claude/contracts/` for shared interfaces
-- Run `/parallel-ready-django` to assess parallelization readiness
