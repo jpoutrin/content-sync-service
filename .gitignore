@@ -69,3 +69,5 @@ supabase/.temp/
 
 # Node modules (for Supabase CLI)
 node_modules/
+.venv/
+.claude-task-complete
