@@ -1,0 +1,4 @@
+# Semantic merge configuration for CPO
+# See: https://mergiraf.org/
+
+*.py merge=mergiraf
