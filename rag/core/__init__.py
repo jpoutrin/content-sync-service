@@ -1,29 +1,36 @@
-from .schemas import (
-    Document,
-    Chunk,
-    Embedding,
-    SearchQuery,
-    SearchResult,
-    RetrievalResult,
+from .acl import (
+    QueryACLContext,
+    Visibility,
 )
 from .interfaces import (
     ChunkerInterface,
     EmbedderInterface,
-    VectorStoreInterface,
     RetrieverInterface,
+    VectorStoreInterface,
+)
+from .schemas import (
+    Chunk,
+    Document,
+    Embedding,
+    RetrievalResult,
+    SearchQuery,
+    SearchResult,
 )
 
 __all__ = [
-    # Schemas
-    "Document",
     "Chunk",
-    "Embedding",
-    "SearchQuery",
-    "SearchResult",
-    "RetrievalResult",
     # Interfaces
     "ChunkerInterface",
+    # Schemas
+    "Document",
     "EmbedderInterface",
-    "VectorStoreInterface",
+    "Embedding",
+    "QueryACLContext",
+    "RetrievalResult",
     "RetrieverInterface",
+    "SearchQuery",
+    "SearchResult",
+    "VectorStoreInterface",
+    # ACL
+    "Visibility",
 ]

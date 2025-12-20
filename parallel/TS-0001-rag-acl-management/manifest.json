@@ -1,0 +1,48 @@
+{
+  "tech_spec_id": "TS-0001",
+  "name": "rag-acl-management",
+  "technology": "python",
+  "python_version": "3.12",
+  "dependencies": {
+    "python": {
+      "add": ["pgvector>=0.3.0"],
+      "upgrade": [],
+      "remove": [],
+      "add_dev": ["pytest-asyncio>=0.21.0"]
+    }
+  },
+  "waves": [
+    {
+      "number": 1,
+      "tasks": [
+        { "id": "task-001", "agent": "python-experts:django-expert" },
+        { "id": "task-002", "agent": "python-experts:python-testing-expert" }
+      ],
+      "validation": "from rag.core.acl import Visibility, QueryACLContext, ACLFilterSpec; print('Wave 1 OK')"
+    },
+    {
+      "number": 2,
+      "tasks": [
+        { "id": "task-003", "agent": "python-experts:django-expert" },
+        { "id": "task-004", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "from rag.core import Document, Chunk, SearchQuery, Visibility, QueryACLContext; print('Wave 2 OK')"
+    },
+    {
+      "number": 3,
+      "tasks": [
+        { "id": "task-005", "agent": "python-experts:django-expert" },
+        { "id": "task-006", "agent": "python-experts:django-expert" },
+        { "id": "task-007", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "from rag.stores.pgvector import PgVectorStore; from yt_sync.rag_bridge import build_acl_context; print('Wave 3 OK')"
+    }
+  ],
+  "metadata": {
+    "tech_spec": "tech-specs/approved/TS-0001-rag-acl-management.md",
+    "generated_at": "2025-12-20T00:00:00Z",
+    "total_tasks": 7,
+    "max_parallel": 3,
+    "critical_path": ["task-001", "task-003", "task-005", "task-007"]
+  }
+}
