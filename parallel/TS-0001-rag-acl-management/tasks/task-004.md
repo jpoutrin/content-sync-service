@@ -1,40 +1,42 @@
 ---
 id: task-004
-component: rag-stores-pgvector
+component: interface-updates
 wave: 2
-deps: [task-001, task-002]
-blocks: [task-005, task-007]
+deps: [task-001]
 agent: python-experts:django-expert
 tech_spec: TS-0001
-contracts: [contracts/acl-types.py, contracts/vector-store.py]
+contracts: [contracts/types.py, contracts/api-schema.yaml]
 ---
-# task-004: RAG Stores PgVector
+# task-004: Update VectorStoreInterface with ACL Methods
 
 ## Scope
-CREATE: rag/stores/__init__.py, rag/stores/pgvector.py
-MODIFY: []
-BOUNDARY: rag/core/interfaces.py, rag/core/schemas.py, rag/core/acl.py
+CREATE: (none)
+MODIFY: rag/core/interfaces.py::VectorStoreInterface
+BOUNDARY: rag/core/acl.py (owned by task-001), rag/core/schemas.py, rag/stores/*, ChunkerInterface, EmbedderInterface, RetrieverInterface
 
 ## Requirements
-- Create rag/stores/__init__.py exporting PgVectorStore
-- Create PgVectorStore class implementing VectorStoreInterface
-- Constructor takes connection_string, table_name='rag_embeddings', dimensions=1536
-- Implement `_get_connection()` method using psycopg2.connect()
-- Implement `search()` with native SQL ACL filtering using ACLFilterSpec.to_sql_conditions()
-- Implement `upsert()` and `upsert_batch()` using psycopg2.extras.execute_values
-- Implement `delete_by_owner()` with SQL DELETE and owner_id filter
-- Implement `delete_by_document()` with SQL DELETE and document_id filter
-- Implement `delete()` for chunk_ids
-- Implement `update_document_acl()` with SQL UPDATE for ACL fields
+- Update `VectorStoreInterface.search()` signature: add `acl_context: Optional[QueryACLContext] = None` parameter
+- Add abstract method `delete_by_owner(owner_id: str, tenant_id: Optional[str] = None) -> int`
+  - Returns count of deleted chunks
+  - Supports optional tenant_id filtering
+- Add abstract method `update_document_acl(document_id: str, visibility: Optional[Visibility] = None, shared_with_users: Optional[list[str]] = None, shared_with_groups: Optional[list[str]] = None) -> int`
+  - Returns count of updated chunks
+  - Updates only non-None parameters
+- Ensure existing `upsert` and `upsert_batch` methods accept chunks with ACL fields (already compatible via Chunk model)
+- All new methods must be decorated with `@abstractmethod`
+- Include comprehensive docstrings with Args/Returns/Raises sections
+- Import `Visibility` and `QueryACLContext` from `.acl` module
+- Do NOT modify other interfaces: ChunkerInterface, EmbedderInterface, RetrieverInterface
 
 ## Checklist
-- [ ] PgVectorStore inherits from VectorStoreInterface
-- [ ] search() raises ValueError if acl_context is None (unless bypass_acl=True)
-- [ ] search() uses cosine similarity via embedding <=> operator
-- [ ] search() returns list[tuple[Chunk, float]] with similarity scores
-- [ ] upsert_batch() handles ACL fields in INSERT
-- [ ] delete_by_owner() supports optional tenant_id scope
-- [ ] update_document_acl() builds dynamic UPDATE query based on provided fields
-- [ ] All methods use context managers for connection/cursor
-- [ ] Transactions committed after write operations
-- [ ] rag/stores/__init__.py exports PgVectorStore
+- [ ] VectorStoreInterface.search() has acl_context parameter
+- [ ] delete_by_owner() is abstract method with correct signature
+- [ ] delete_by_owner() returns int (count of deleted chunks)
+- [ ] update_document_acl() is abstract method with correct signature
+- [ ] update_document_acl() returns int (count of updated chunks)
+- [ ] All methods have comprehensive docstrings (Args/Returns/Raises)
+- [ ] Imports Visibility and QueryACLContext from .acl
+- [ ] ChunkerInterface unchanged
+- [ ] EmbedderInterface unchanged
+- [ ] RetrieverInterface unchanged
+- [ ] No files modified outside scope

@@ -1,70 +1,39 @@
-# Context: RAG ACL Management
+# Context for TS-0001: RAG ACL Management
 
 ## Project Overview
+Content Sync Service - Django-based content synchronization service using PostgreSQL (Supabase) and Django-Q.
 
-Content Sync Service is a Django-based application for synchronizing and analyzing YouTube content. The service enables users to sync their YouTube videos, process content for RAG (Retrieval-Augmented Generation), and perform semantic searches across their video libraries.
+## Tech Stack
+- Python 3.12
+- Django 5.0+
+- PostgreSQL with pgvector extension v0.8.0
+- Pydantic 2.5+ for schemas
 
-## Technology Stack
+## Existing Codebase State
 
-- **Framework**: Django 5.x
-- **Database**: PostgreSQL (via Supabase)
-- **Vector Store**: pgvector extension
-- **Python**: 3.12
-- **Task Queue**: Django-Q (ORM backend)
+### RAG Core Module (rag/core/)
+- **schemas.py**: Has Document, Chunk, SearchQuery, SearchResult, Embedding models - NO ACL fields yet
+- **interfaces.py**: Has VectorStoreInterface with basic upsert/search/delete - NO ACL methods yet
+- **__init__.py**: Exports all schemas and interfaces
 
-## Current Architecture
+### RAG Stores Module (rag/stores/)
+- Directory does NOT exist - must be created
 
-### RAG Module (`rag/core/`)
+### YouTube Sync Module (yt_sync/)
+- **models.py**: Has User, Source, Video, ProcessedContent Django models
 
-The existing RAG module provides basic document processing and vector search capabilities:
+## Dependencies Already Present
+- pydantic>=2.5.0
+- psycopg2-binary>=2.9.9
+- Django>=5.0
 
-- **Schemas** (`rag/core/schemas.py`):
-  - `Document`: Represents a processable document with metadata
-  - `Chunk`: Text segments with embeddings for vector search
-  - `SearchQuery`: Query parameters for semantic search
+## Key Constraints
+1. Existing schemas must be MODIFIED, not replaced
+2. All existing fields must be preserved
+3. Backward compatibility required
+4. Database uses Supabase PostgreSQL with pgvector v0.8.0 enabled
 
-- **Interfaces** (`rag/core/interfaces.py`):
-  - `VectorStoreInterface`: Abstract base for vector storage implementations
-  - Defines methods: `add_documents()`, `search()`, `delete_documents()`
-
-- **Current Limitation**: No access control - all queries return all documents
-
-### YouTube Sync Module (`yt_sync/`)
-
-Manages YouTube content synchronization with Django models:
-
-- **User Model**: Django's built-in User model for authentication
-- **Source Model**: YouTube channels/playlists owned by users
-- **Video Model**: Individual videos linked to sources and users
-- **Relationship**: `Video.user` → `User` (ForeignKey, owner relationship)
-
-## Tech Spec Goal
-
-Add multi-user access control to the RAG system to enable secure, user-scoped queries. Users should only retrieve:
-1. Documents they own (created from their YouTube videos)
-2. Documents explicitly shared with them
-3. Public documents (if visibility settings allow)
-
-## Key Requirements
-
-1. **ACL Context**: Query-time context specifying user identity and permissions
-2. **Visibility Levels**: Private, shared, public document classifications
-3. **Filter Specifications**: PostgreSQL-compatible WHERE clauses for ACL enforcement
-4. **Vector Store Integration**: Extend `VectorStoreInterface` with ACL-aware methods
-5. **Bridge Layer**: Connect `yt_sync` models to RAG ACL system
-
-## Constraints
-
-- Must maintain backward compatibility with existing `VectorStoreInterface`
-- ACL filtering must happen at database level (not post-query filtering)
-- No breaking changes to existing `Document` and `Chunk` schemas
-- Must integrate with Django's existing User model
-- PostgreSQL-specific optimizations allowed (pgvector + native arrays)
-
-## Success Criteria
-
-1. User A cannot retrieve User B's private documents via RAG queries
-2. Shared documents are accessible only to authorized users
-3. Public documents are accessible to all authenticated users
-4. Performance overhead < 50ms for ACL filtering on 100k+ documents
-5. All existing RAG functionality continues to work unchanged
+## Related Documents
+- Tech Spec: tech-specs/approved/TS-0001-rag-acl-management.md
+- RFC-0001: RAG ACL Management (APPROVED)
+- RFC-0002: Vector Storage for RAG - Phase 1 (APPROVED)

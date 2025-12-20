@@ -1,260 +1,187 @@
-# TS-0001: RAG ACL Management Task Graph
+# Task Dependency Graph: TS-0001 RAG ACL Management
 
-## Wave Execution Plan
-
-This task decomposition follows a 4-wave execution strategy with parallel execution within each wave.
+## Mermaid Diagram
 
 ```mermaid
-flowchart TB
-    subgraph Wave1["Wave 1: Core Types & Schemas"]
-        T001["task-001<br/>rag-core-acl<br/>Create acl.py"]
-        T002["task-002<br/>rag-core-schemas-update<br/>Update schemas.py"]
-    end
+graph TD
+    %% Wave 1: Foundation
+    T001[task-001: acl-core<br/>Core ACL types]
+    T002[task-002: acl-core-tests<br/>Unit tests for ACL core]
 
-    subgraph Wave2["Wave 2: Interfaces & Storage"]
-        T003["task-003<br/>rag-core-interfaces-update<br/>Update interfaces.py"]
-        T004["task-004<br/>rag-stores-pgvector<br/>Create pgvector.py"]
-    end
+    %% Wave 2: Schema & Interface
+    T003[task-003: schema-updates<br/>Extend Document/Chunk models]
+    T004[task-004: interface-updates<br/>Update VectorStoreInterface]
 
-    subgraph Wave3["Wave 3: Migration & Integration"]
-        T005["task-005<br/>rag-migration-embeddings-table<br/>Create migration"]
-        T006["task-006<br/>yt-sync-rag-bridge<br/>Create bridge.py"]
-    end
+    %% Wave 3: Implementation
+    T005[task-005: pgvector-store<br/>ACL-aware storage implementation]
+    T006[task-006: database-migration<br/>Add ACL columns to DB]
+    T007[task-007: django-bridge<br/>Django User → ACL bridge]
 
-    subgraph Wave4["Wave 4: Testing"]
-        T007["task-007<br/>rag-acl-tests<br/>Create test suite"]
-    end
-
+    %% Dependencies
+    T001 --> T002
     T001 --> T003
     T001 --> T004
-    T002 --> T003
-    T002 --> T004
-
     T003 --> T005
-    T003 --> T006
     T004 --> T005
-    T004 --> T006
-
     T005 --> T007
-    T006 --> T007
 
-    classDef critical fill:#ff6b6b,stroke:#c92a2a,color:#fff
-    classDef parallel fill:#4dabf7,stroke:#1971c2,color:#fff
-    classDef final fill:#51cf66,stroke:#2f9e44,color:#fff
+    %% Wave styling
+    classDef wave1 fill:#e1f5ff,stroke:#0066cc,stroke-width:2px
+    classDef wave2 fill:#fff4e1,stroke:#cc8800,stroke-width:2px
+    classDef wave3 fill:#e8f5e9,stroke:#00aa44,stroke-width:2px
 
-    class T001,T003,T005,T007 critical
-    class T002,T004,T006 parallel
-    class T007 final
+    class T001,T002 wave1
+    class T003,T004 wave2
+    class T005,T006,T007 wave3
 ```
-
-## Critical Path
-
-The critical path represents the longest dependency chain and determines minimum completion time:
-
-**Critical Path**: `task-001 → task-003 → task-005 → task-007`
-
-**Estimated Timeline**:
-- Wave 1: 2-3 hours (parallel execution)
-- Wave 2: 3-4 hours (parallel execution)
-- Wave 3: 2-3 hours (parallel execution)
-- Wave 4: 4-5 hours (comprehensive testing)
-
-**Total Minimum Time**: ~11-15 hours (assuming optimal parallel execution)
 
 ## Wave Breakdown
 
-### Wave 1: Foundation Layer
+### Wave 1: Foundation (Parallel Execution: 2 agents)
+**Estimated Duration**: 45 minutes
 
-**Objective**: Establish core ACL types and update existing schemas
+| Task ID | Component | Agent | Duration | Can Start | Blocks |
+|---------|-----------|-------|----------|-----------|--------|
+| task-001 | acl-core | python-experts:django-expert | 30 min | Immediately | task-002, task-003, task-004 |
+| task-002 | acl-core-tests | python-experts:python-testing-expert | 45 min | After task-001 | None |
 
-**Tasks**:
-- `task-001`: Create `rag/core/acl.py` with ACL types
-- `task-002`: Update `rag/core/schemas.py` with ACL fields
+**Wave Output**: Foundation ACL types (Visibility, QueryACLContext, ACLFilter) with unit tests
 
-**Parallelization**: These tasks are fully independent and can run simultaneously.
-
-**Output Contracts**:
-- `Visibility` enum
-- `QueryACLContext` model
-- `ACLFilterSpec` model
-- Updated `Document` and `Chunk` schemas
-
-**Estimated Time**: 2-3 hours
+**Bottleneck**: task-001 is critical path - blocks all Wave 2 work
 
 ---
 
-### Wave 2: Interface & Implementation Layer
+### Wave 2: Schema & Interface Updates (Parallel Execution: 2 agents)
+**Estimated Duration**: 30 minutes
 
-**Objective**: Extend interfaces and implement vector store with ACL support
+| Task ID | Component | Agent | Duration | Can Start | Blocks |
+|---------|-----------|-------|----------|-----------|--------|
+| task-003 | schema-updates | python-experts:django-expert | 30 min | After task-001 | task-005 |
+| task-004 | interface-updates | python-experts:django-expert | 30 min | After task-001 | task-005 |
 
-**Tasks**:
-- `task-003`: Update `rag/core/interfaces.py` with ACL methods
-- `task-004`: Create `rag/stores/pgvector.py` with PgVectorStore
+**Wave Output**: Extended Document/Chunk schemas and updated VectorStoreInterface with ACL methods
 
-**Dependencies**: Both tasks require Wave 1 completion (need ACL types and updated schemas)
-
-**Parallelization**: These tasks can run in parallel after Wave 1.
-
-**Output Contracts**:
-- Extended `VectorStoreInterface` with ACL methods
-- `PgVectorStore` implementation
-- ACL-aware search logic
-- GDPR deletion methods
-
-**Estimated Time**: 3-4 hours
+**Parallelization**: Both tasks depend only on task-001, can run simultaneously
 
 ---
 
-### Wave 3: Persistence & Integration Layer
+### Wave 3: Implementation (Parallel Execution: 3 agents)
+**Estimated Duration**: 60 minutes
 
-**Objective**: Create database schema and Django integration
+| Task ID | Component | Agent | Duration | Can Start | Blocks |
+|---------|-----------|-------|----------|-----------|--------|
+| task-005 | pgvector-store | python-experts:django-expert | 60 min | After task-003, task-004 | task-007 |
+| task-006 | database-migration | python-experts:django-expert | 20 min | Immediately* | None |
+| task-007 | django-bridge | python-experts:django-expert | 45 min | After task-005 | None |
 
-**Tasks**:
-- `task-005`: Create Django migration for `rag_embeddings` table
-- `task-006`: Create `yt_sync/rag_bridge.py` for Django integration
+**Wave Output**: Fully functional ACL-aware RAG storage with Django integration
 
-**Dependencies**: Both tasks require Wave 2 completion (need interfaces and store implementation)
-
-**Parallelization**: These tasks can run in parallel after Wave 2.
-
-**Output Contracts**:
-- `rag_embeddings` table with ACL columns
-- Optimized indexes (GIN, B-tree)
-- Django-to-RAG ACL conversion functions
-- User/Group context builders
-
-**Estimated Time**: 2-3 hours
+**Note**: task-006 has no code dependencies (schema known from Tech Spec), but should coordinate with task-005 to verify column names match implementation
 
 ---
 
-### Wave 4: Verification Layer
+## Critical Path Analysis
 
-**Objective**: Comprehensive testing of all ACL functionality
+### Critical Path: task-001 → task-003 → task-005 → task-007
+**Total Duration**: 165 minutes (2h 45m)
 
-**Tasks**:
-- `task-007`: Create complete test suite for ACL functionality
+```
+task-001 (30m) → task-003 (30m) → task-005 (60m) → task-007 (45m)
+```
 
-**Dependencies**: Requires all previous waves (tests entire system)
+**Critical Path Tasks**:
+1. **task-001** (acl-core): Foundation types - MUST complete first
+2. **task-003** (schema-updates): Extends models - required for pgvector implementation
+3. **task-005** (pgvector-store): Core storage logic - required for Django bridge
+4. **task-007** (django-bridge): Final integration piece
 
-**Parallelization**: Single task (cannot parallelize comprehensive integration testing)
+**Optimization Opportunities**:
+- task-006 (migration) can start early - reduce to 20m with clear schema spec
+- task-002 (tests) runs parallel to Wave 2 - no impact on critical path
+- task-004 (interface) runs parallel to task-003 - no impact on critical path
 
-**Output Contracts**:
-- Unit tests for all ACL components
-- Integration tests for search filtering
-- GDPR deletion tests
-- Performance benchmarks
-- Edge case coverage
+### Non-Critical Paths
 
-**Estimated Time**: 4-5 hours
+**Path A: task-001 → task-004 → task-005**
+Duration: 120 minutes (runs parallel to task-003 → task-005)
 
-## Dependencies Table
+**Path B: task-001 → task-002**
+Duration: 75 minutes (testing path - parallel to main implementation)
 
-| Task | Depends On | Blocks | Wave | Parallelizable |
-|------|------------|--------|------|----------------|
-| task-001 | None | task-003, task-004 | 1 | Yes (with task-002) |
-| task-002 | None | task-003, task-004 | 1 | Yes (with task-001) |
-| task-003 | task-001, task-002 | task-005, task-006 | 2 | Yes (with task-004) |
-| task-004 | task-001, task-002 | task-005, task-006 | 2 | Yes (with task-003) |
-| task-005 | task-003, task-004 | task-007 | 3 | Yes (with task-006) |
-| task-006 | task-003, task-004 | task-007 | 3 | Yes (with task-005) |
-| task-007 | task-005, task-006 | None | 4 | No |
+**Path C: task-006 (standalone)**
+Duration: 20 minutes (can start immediately, completes before Wave 3)
 
-## Parallel Execution Strategy
+---
 
-### Maximum Parallelization
+## Parallelization Summary
 
-**Wave 1**: 2 agents in parallel
-- Agent A: task-001 (rag-core-acl)
-- Agent B: task-002 (rag-core-schemas-update)
+| Wave | Parallel Agents | Duration | Efficiency |
+|------|----------------|----------|------------|
+| Wave 1 | 2 agents | 45 min | 100% (task-001 blocks, task-002 runs after) |
+| Wave 2 | 2 agents | 30 min | 100% (both tasks fully parallel) |
+| Wave 3 | 3 agents | 60 min | 80% (task-006 completes early, task-007 waits on task-005) |
 
-**Wave 2**: 2 agents in parallel
-- Agent A: task-003 (rag-core-interfaces-update)
-- Agent B: task-004 (rag-stores-pgvector)
+**Overall Stats**:
+- Sequential execution time: ~255 minutes (4h 15m)
+- Parallel execution time: ~135 minutes (2h 15m)
+- Speedup: 1.9x
+- Peak parallelization: 3 agents (Wave 3)
 
-**Wave 3**: 2 agents in parallel
-- Agent A: task-005 (rag-migration-embeddings-table)
-- Agent B: task-006 (yt-sync-rag-bridge)
+---
 
-**Wave 4**: 1 agent
-- Agent A: task-007 (rag-acl-tests)
+## Execution Strategy
 
-**Resource Efficiency**: 2 concurrent agents for most of the work, reducing to 1 for final testing.
+### Recommended Agent Allocation
+
+**Wave 1**:
+- Agent 1: task-001 (acl-core) - CRITICAL PATH
+- Agent 2: Waits, then task-002 (tests) after task-001
+
+**Wave 2** (after task-001 completes):
+- Agent 1: task-003 (schema-updates) - CRITICAL PATH
+- Agent 2: task-004 (interface-updates)
+
+**Wave 3** (after task-003 & task-004 complete):
+- Agent 1: task-005 (pgvector-store) - CRITICAL PATH
+- Agent 2: task-006 (migration) - starts immediately, completes early
+- Agent 3: task-007 (django-bridge) - waits for task-005
 
 ### Risk Mitigation
 
-**Merge Conflicts**:
-- Wave 1: No conflicts (different files)
-- Wave 2: No conflicts (different files)
-- Wave 3: No conflicts (different files)
-- Wave 4: Single agent, no conflicts
+**Risk**: task-005 is complex (60 min) and blocks task-007
+**Mitigation**: Ensure task-005 agent has clear contracts from task-003/task-004
 
-**Contract Violations**:
-- Each wave produces contracts consumed by next wave
-- Contract validation happens at wave boundaries
-- Early detection of integration issues
+**Risk**: task-006 schema mismatch with task-005 implementation
+**Mitigation**: task-006 uses explicit column names from Tech Spec; task-005 validates against migration
 
-**Testing Coverage**:
-- Wave 4 validates all previous work
-- Each task includes basic validation tests
-- Integration issues caught before final merge
+**Risk**: task-002 tests may reveal ACL logic issues
+**Mitigation**: task-002 agent reports failures immediately; Wave 2 can adapt if needed
 
-## Verification Checklist
+---
 
-After each wave, verify:
+## Integration Checkpoints
 
-**Wave 1 Completion**:
-- [ ] `rag/core/acl.py` exists with Visibility enum
-- [ ] `rag/core/schemas.py` includes ACL fields
-- [ ] All Pydantic models validate correctly
-- [ ] Type hints are complete
+### Checkpoint 1: After Wave 1
+**Verify**: ACL core types are complete and tested
+**Artifacts**: `rag/core/acl.py`, test coverage report
 
-**Wave 2 Completion**:
-- [ ] `VectorStoreInterface` has ACL methods
-- [ ] `PgVectorStore` implements interface
-- [ ] SQL queries use parameterized inputs
-- [ ] ACL filtering logic is correct
+### Checkpoint 2: After Wave 2
+**Verify**: Schemas and interfaces match ACL core types
+**Artifacts**: `rag/core/schemas.py`, `rag/core/interfaces.py`, type checking passes
 
-**Wave 3 Completion**:
-- [ ] Migration file created and valid
-- [ ] Table schema matches design
-- [ ] Indexes created correctly
-- [ ] Bridge converts Django models correctly
+### Checkpoint 3: After Wave 3
+**Verify**: Full integration - ACL filtering works end-to-end
+**Artifacts**: `rag/stores/pgvector.py`, `yt_sync/rag_bridge.py`, migration file, integration test passes
 
-**Wave 4 Completion**:
-- [ ] All tests pass
-- [ ] Coverage > 90%
-- [ ] Performance benchmarks acceptable
-- [ ] Documentation complete
+---
 
-## Rollback Strategy
+## Estimated Completion Times
 
-**Wave Failure Handling**:
-1. **Wave 1 Failure**: Delete created files, no migration needed
-2. **Wave 2 Failure**: Revert Wave 2 changes, Wave 1 remains stable
-3. **Wave 3 Failure**: Rollback migration, revert bridge code
-4. **Wave 4 Failure**: Fix tests, code remains deployable
+| Metric | Time |
+|--------|------|
+| First deliverable (task-001) | +30 min |
+| 50% tasks complete | +75 min |
+| All tasks complete | +135 min |
+| Integration verified | +150 min |
 
-**Clean Rollback**:
-- Each wave is a clean commit boundary
-- Git worktrees isolate parallel work
-- Integration verification before main merge
-
-## Success Criteria
-
-**Technical Completion**:
-- All 7 tasks completed successfully
-- Tests passing with >90% coverage
-- Migration runs without errors
-- No security vulnerabilities
-
-**Functional Completion**:
-- ACL filtering works for all visibility levels
-- GDPR deletion removes all user data
-- Performance overhead <5ms
-- Django integration seamless
-
-**Quality Gates**:
-- Type checking passes (mypy)
-- Linting passes (ruff)
-- Security scan passes
-- Code review approved
+**Target**: Full TS-0001 implementation in **2.5 hours** with parallel execution

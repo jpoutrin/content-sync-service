@@ -1,34 +1,56 @@
 ---
 id: task-006
-component: yt-sync-rag-bridge
+component: database-migration
 wave: 3
-deps: [task-001]
-blocks: [task-007]
+deps: []
 agent: python-experts:django-expert
 tech_spec: TS-0001
-contracts: [contracts/acl-types.py, contracts/user-bridge.py]
+contracts: []
 ---
-# task-006: YT Sync RAG Bridge
+# task-006: Create Database Migration for RAG Embeddings Table
 
 ## Scope
-CREATE: yt_sync/rag_bridge.py
-MODIFY: []
-BOUNDARY: yt_sync/models.py, yt_sync/user_model.py, rag/core/acl.py
+CREATE: rag/migrations/0001_create_rag_embeddings.py
+MODIFY: (none)
+BOUNDARY: rag/core/*, rag/stores/*, yt_sync/*
 
 ## Requirements
-- Create `build_acl_context(user: User) -> QueryACLContext` function
-- Resolve user's group memberships from Django's auth groups
-- Handle tenant_id if present on user model (getattr with None default)
-- Create `get_system_context() -> QueryACLContext` function returning QueryACLContext.system_context()
-- Add type hints for all functions
-- Handle case where user is None or anonymous
+- Create Django migration file with raw SQL (not ORM model)
+- Enable pgvector extension: `CREATE EXTENSION IF NOT EXISTS vector`
+- Create `rag_embeddings` table with columns:
+  - `id` UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  - `chunk_id` VARCHAR(255) UNIQUE NOT NULL
+  - `document_id` VARCHAR(255) NOT NULL
+  - `content` TEXT NOT NULL
+  - `embedding` vector(1536) NOT NULL
+  - `metadata` JSONB DEFAULT '{}'
+  - `owner_id` VARCHAR(255) NOT NULL
+  - `visibility` VARCHAR(50) NOT NULL DEFAULT 'PRIVATE'
+  - `shared_with_users` TEXT[] DEFAULT '{}'
+  - `shared_with_groups` TEXT[] DEFAULT '{}'
+  - `tenant_id` VARCHAR(255)
+  - `created_at` TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+  - `updated_at` TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+- Create HNSW index on embedding column: `CREATE INDEX idx_rag_embeddings_embedding ON rag_embeddings USING hnsw (embedding vector_cosine_ops)`
+- Create B-tree indexes:
+  - `CREATE INDEX idx_rag_embeddings_owner ON rag_embeddings (owner_id)`
+  - `CREATE INDEX idx_rag_embeddings_visibility ON rag_embeddings (visibility)`
+  - `CREATE INDEX idx_rag_embeddings_document ON rag_embeddings (document_id)`
+  - `CREATE INDEX idx_rag_embeddings_tenant ON rag_embeddings (tenant_id) WHERE tenant_id IS NOT NULL` (partial index)
+- Create GIN indexes for array columns:
+  - `CREATE INDEX idx_rag_embeddings_shared_users ON rag_embeddings USING gin (shared_with_users)`
+  - `CREATE INDEX idx_rag_embeddings_shared_groups ON rag_embeddings USING gin (shared_with_groups)`
+- Migration must be reversible (include DROP statements in reverse operation)
+- Use idempotent operations (IF NOT EXISTS, IF EXISTS)
 
 ## Checklist
-- [ ] build_acl_context() extracts user.id as principal_id (convert UUID to str)
-- [ ] build_acl_context() resolves groups via user.groups.all()
-- [ ] build_acl_context() converts group IDs to strings
-- [ ] build_acl_context() handles tenant_id via getattr(user, 'tenant_id', None)
-- [ ] get_system_context() returns QueryACLContext with bypass_acl=True
-- [ ] Anonymous user handling returns appropriate context or raises
-- [ ] All functions have type hints and docstrings
-- [ ] Imports from rag.core.acl work correctly
+- [ ] Migration is reversible (has reverse_sql or operations)
+- [ ] pgvector extension enabled with IF NOT EXISTS
+- [ ] Table created with all required columns
+- [ ] chunk_id has UNIQUE constraint
+- [ ] HNSW index uses vector_cosine_ops
+- [ ] B-tree indexes created for owner_id, visibility, document_id, tenant_id
+- [ ] tenant_id index is partial (WHERE tenant_id IS NOT NULL)
+- [ ] GIN indexes created for shared_with_users and shared_with_groups
+- [ ] Timestamps have default values
+- [ ] No files modified outside scope

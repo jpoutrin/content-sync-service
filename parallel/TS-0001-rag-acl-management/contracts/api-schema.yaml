@@ -1,16 +1,86 @@
 # API Schema for TS-0001: RAG ACL Management
-#
-# NOTE: This technical specification is a Python-only implementation
-# that adds ACL (Access Control List) filtering to the RAG module's
-# internal data models and vector store interface.
-#
-# There are NO REST API changes, GraphQL endpoints, or external API
-# contracts introduced by this work.
-#
-# All ACL enforcement happens at the:
-# - Data model layer (Document and Chunk schemas)
-# - Vector store interface layer (search method signature)
-# - Internal Python API surface
-#
-# External APIs remain unchanged and will consume these internal
-# ACL capabilities through existing endpoints in future work.
+# This is a Python library module, not an HTTP API
+# This file documents the Python interface contracts
+
+info:
+  title: RAG ACL Management
+  version: "1.0"
+  description: |
+    Access Control List management for the RAG module.
+    This is a library interface, not an HTTP API.
+
+python_interface:
+  # Core ACL Types (rag/core/acl.py)
+  acl_module:
+    location: rag/core/acl.py
+    exports:
+      - Visibility
+      - QueryACLContext
+      - ACLFilterSpec
+
+  # Updated Schemas (rag/core/schemas.py)
+  schemas_module:
+    location: rag/core/schemas.py
+    modified_classes:
+      - name: Document
+        added_fields:
+          - owner_id: str (required)
+          - visibility: Visibility (default: PRIVATE)
+          - shared_with_users: list[str] (default: [])
+          - shared_with_groups: list[str] (default: [])
+          - tenant_id: Optional[str] (default: None)
+      - name: Chunk
+        added_fields: same as Document
+        added_methods:
+          - from_document(document, chunk_id, content, embedding, **metadata) -> Chunk
+      - name: SearchQuery
+        added_fields:
+          - acl_context: QueryACLContext (required)
+
+  # Updated Interfaces (rag/core/interfaces.py)
+  interfaces_module:
+    location: rag/core/interfaces.py
+    modified_classes:
+      - name: VectorStoreInterface
+        modified_methods:
+          - search(query_vector, top_k, filters, acl_context) -> list[tuple[Chunk, float]]
+        added_methods:
+          - delete_by_owner(owner_id, tenant_id) -> int
+          - update_document_acl(document_id, visibility, shared_with_users, shared_with_groups) -> int
+
+  # New Store Implementation (rag/stores/pgvector.py)
+  stores_module:
+    location: rag/stores/pgvector.py
+    new_classes:
+      - name: PgVectorStore
+        implements: VectorStoreInterface
+        constructor:
+          - connection_string: str
+          - table_name: str (default: "rag_embeddings")
+          - dimensions: int (default: 1536)
+
+  # Django Bridge (yt_sync/rag_bridge.py)
+  bridge_module:
+    location: yt_sync/rag_bridge.py
+    functions:
+      - build_acl_context(user: User) -> QueryACLContext
+      - get_vector_store() -> PgVectorStore
+      - system_acl_context() -> QueryACLContext
+
+usage_example: |
+  from rag.core import Document, Chunk, SearchQuery, Visibility, QueryACLContext
+  from rag.stores import PgVectorStore
+  from yt_sync.rag_bridge import build_acl_context, get_vector_store
+
+  # Build ACL context from Django user
+  acl_context = build_acl_context(request.user)
+
+  # Get configured store
+  store = get_vector_store()
+
+  # Search with ACL filtering
+  results = store.search(
+      query_vector=embedder.embed(query),
+      top_k=10,
+      acl_context=acl_context
+  )

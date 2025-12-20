@@ -1,219 +1,178 @@
-# TS-0001: RAG ACL Management Architecture
+# Architecture: RAG ACL Management (TS-0001)
 
-## Overview
+## Architecture Overview
 
-This technical specification implements Access Control List (ACL) capabilities for the RAG (Retrieval-Augmented Generation) module. The implementation enables fine-grained access control for document chunks based on user permissions, groups, and visibility levels.
-
-The architecture follows a layered approach with clear separation of concerns:
-- **Core ACL Types**: Fundamental ACL concepts and schemas
-- **Schema Extensions**: Integration of ACL fields into existing data models
-- **Interface Extensions**: ACL-aware search and GDPR deletion capabilities
-- **Vector Store Implementation**: Efficient ACL filtering using PostgreSQL/pgvector
-- **Database Schema**: Optimized table structure with ACL columns and indexes
-- **Django Integration**: Bridge layer connecting Django's auth system to RAG ACL
-
-## Component Diagram
-
-```mermaid
-graph TB
-    subgraph "Django Layer"
-        A[Django User/Group Models]
-        B[yt_sync/rag_bridge.py]
-    end
-
-    subgraph "RAG Core Layer"
-        C[rag/core/acl.py<br/>Visibility, QueryACLContext, ACLFilterSpec]
-        D[rag/core/schemas.py<br/>Document, Chunk with ACL fields]
-        E[rag/core/interfaces.py<br/>VectorStoreInterface]
-    end
-
-    subgraph "Storage Layer"
-        F[rag/stores/pgvector.py<br/>PgVectorStore]
-        G[rag_embeddings Table<br/>PostgreSQL + pgvector]
-    end
-
-    subgraph "Migration Layer"
-        H[Django Migration<br/>rag_embeddings schema]
-    end
-
-    A --> B
-    B --> C
-    C --> D
-    D --> E
-    E --> F
-    F --> G
-    H --> G
-
-    style C fill:#e1f5ff
-    style D fill:#e1f5ff
-    style E fill:#e1f5ff
-    style F fill:#ffe1e1
-    style G fill:#ffe1e1
-    style B fill:#f0ffe1
-    style H fill:#f0ffe1
-```
-
-## Key Design Decisions
-
-### 1. ACL Model Design
-
-**Visibility Levels**:
-- `PUBLIC`: Available to all users
-- `AUTHENTICATED`: Requires authentication
-- `GROUPS`: Restricted to specific groups
-- `USERS`: Restricted to specific users
-- `PRIVATE`: Owner-only access
-
-**Rationale**: This hierarchy provides flexibility while maintaining simplicity. The enum-based approach ensures type safety and makes ACL logic explicit.
-
-### 2. Database Schema Design
-
-**ACL Columns**:
-- `visibility`: Enum column for visibility level
-- `owner_id`: UUID reference to content owner
-- `allowed_user_ids`: JSONB array of user UUIDs
-- `allowed_group_ids`: JSONB array of group IDs
-
-**Rationale**: Using JSONB for arrays enables efficient PostgreSQL array operations and GIN indexing. Native SQL filtering provides better performance than application-level filtering.
-
-### 3. Query Performance Optimization
-
-**Indexing Strategy**:
-- B-tree index on `visibility` for common filtering
-- GIN indexes on `allowed_user_ids` and `allowed_group_ids` for array containment queries
-- Composite index on frequently combined columns
-
-**Rationale**: Indexes enable efficient ACL filtering even with millions of chunks. PostgreSQL's native array operations with GIN indexes provide optimal performance.
-
-### 4. GDPR Compliance
-
-**Deletion Capabilities**:
-- `delete_by_user_id`: Remove all content owned by a user
-- `delete_by_group_id`: Remove all content restricted to a group
-- Cascade deletion support in Django migration
-
-**Rationale**: GDPR "right to be forgotten" requires efficient user data deletion. Dedicated methods ensure complete removal of user-associated content.
-
-### 5. Bridge Layer Pattern
-
-**Django Integration**:
-- Separate bridge module (`yt_sync/rag_bridge.py`) converts Django models to RAG ACL contexts
-- No direct coupling between RAG core and Django
-
-**Rationale**: Maintains RAG module independence. The bridge pattern allows RAG to be used with different auth systems or standalone.
-
-### 6. Type Safety
-
-**Pydantic Models**:
-- All ACL types defined as Pydantic models
-- Strict validation at API boundaries
-- Type hints throughout
-
-**Rationale**: Pydantic ensures data validation and serialization consistency. Type hints improve IDE support and catch errors early.
-
-## File Structure
+This Tech Spec implements Access Control List (ACL) management for the RAG module, enabling content visibility control based on user permissions and group memberships.
 
 ```
-rag/
-├── core/
-│   ├── acl.py              # NEW: ACL types and contexts
-│   ├── schemas.py          # MODIFIED: Add ACL fields
-│   └── interfaces.py       # MODIFIED: Add ACL methods
-├── stores/
-│   └── pgvector.py         # NEW: PgVectorStore implementation
-└── migrations/
-    └── 0001_create_embeddings_table.py  # NEW: Database schema
-
-yt_sync/
-└── rag_bridge.py           # NEW: Django integration bridge
-
-tests/
-└── rag/
-    └── test_acl.py         # NEW: Comprehensive test suite
+┌─────────────────────────────────────────────────────────────────┐
+│                     Django Application Layer                     │
+│                                                                   │
+│  ┌──────────────────┐                                            │
+│  │  yt_sync module  │                                            │
+│  │                  │                                            │
+│  │  rag_bridge.py   │ ◄── Converts Django User → QueryACLContext │
+│  └────────┬─────────┘                                            │
+│           │                                                       │
+└───────────┼───────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         RAG Module Layer                         │
+│                                                                   │
+│  ┌──────────────────┐     ┌──────────────────┐                  │
+│  │  core/acl.py     │     │  core/schemas.py │                  │
+│  │                  │     │                  │                  │
+│  │  • Visibility    │────▶│  • Document      │                  │
+│  │  • ACLContext    │     │  • Chunk         │                  │
+│  │  • ACLFilter     │     │    (with ACL)    │                  │
+│  └──────────────────┘     └──────────────────┘                  │
+│           │                         │                            │
+│           ▼                         │                            │
+│  ┌──────────────────┐               │                            │
+│  │ core/interfaces  │               │                            │
+│  │                  │               │                            │
+│  │ VectorStore      │               │                            │
+│  │ Interface        │◄──────────────┘                            │
+│  │ (ACL-aware)      │                                            │
+│  └────────┬─────────┘                                            │
+│           │                                                       │
+└───────────┼───────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Storage Implementation Layer                  │
+│                                                                   │
+│  ┌──────────────────────────────────────────────────────────────┐│
+│  │  stores/pgvector.py                                          ││
+│  │                                                              ││
+│  │  PostgresPGVectorStore                                       ││
+│  │  • similarity_search_with_acl()                              ││
+│  │  • add_texts() - propagates ACL to chunks                    ││
+│  │  • Native SQL ACL filtering                                  ││
+│  └──────────────────────────────────────────────────────────────┘│
+│           │                                                       │
+└───────────┼───────────────────────────────────────────────────────┘
+            │
+            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      PostgreSQL + pgvector                       │
+│                                                                   │
+│  Tables:                                                         │
+│  • rag_documents (visibility, owner_id, allowed_groups)          │
+│  • rag_chunks (visibility, owner_id, allowed_groups, embedding)  │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+## Component Responsibilities
+
+| Component | File Path | Responsibilities |
+|-----------|-----------|------------------|
+| **ACL Core Types** | `rag/core/acl.py` | Define Visibility enum, QueryACLContext (user context), ACLFilter (query construction) |
+| **Schema Extensions** | `rag/core/schemas.py` | Extend Document and Chunk models with ACL fields (visibility, owner_id, allowed_groups) |
+| **Interface Updates** | `rag/core/interfaces.py` | Add ACL-aware methods to VectorStoreInterface (similarity_search_with_acl) |
+| **pgvector Store** | `rag/stores/pgvector.py` | Implement ACL filtering in PostgreSQL queries, propagate ACL from documents to chunks |
+| **Django Bridge** | `yt_sync/rag_bridge.py` | Convert Django User/request context to QueryACLContext, resolve group memberships |
+| **Database Schema** | Migration file | Add ACL columns to rag_documents and rag_chunks tables with indexes |
+
+## Design Decisions
+
+| Decision | Rationale | Trade-offs |
+|----------|-----------|------------|
+| **pgvector for storage** | Per RFC-0002, native SQL enables efficient ACL filtering alongside vector similarity | Couples ACL logic to PostgreSQL; harder to swap storage backends |
+| **Denormalized ACL on chunks** | Query performance - avoid JOINs on every search | Storage overhead; must keep chunks in sync with parent document |
+| **Group resolution at query time** | Flexibility - group changes immediately affect access | Slight query overhead vs. caching group memberships |
+| **Required QueryACLContext** | Security by default - all searches must specify user context | More verbose API; cannot accidentally skip ACL checks |
+| **Visibility enum** | Clear, type-safe access levels (PUBLIC, PRIVATE, GROUP) | Less flexible than role-based permissions |
 
 ## Data Flow
 
 ### Document Ingestion with ACL
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Bridge as yt_sync/rag_bridge
-    participant Core as RAG Core
-    participant Store as PgVectorStore
-    participant DB as PostgreSQL
-
-    Client->>Bridge: Create document with Django user/groups
-    Bridge->>Core: Convert to Document with ACL fields
-    Core->>Store: store_chunks(chunks)
-    Store->>DB: INSERT with visibility, owner_id, allowed_*_ids
-    DB-->>Store: Confirmation
-    Store-->>Core: Success
-    Core-->>Client: Document stored
+```
+1. Django view receives content + user context
+   ↓
+2. rag_bridge.py creates ACLContext from Django User
+   ↓
+3. Create Document with ACL fields (visibility, owner_id, allowed_groups)
+   ↓
+4. PostgresPGVectorStore.add_texts() chunks document
+   ↓
+5. ACL fields propagated to each Chunk
+   ↓
+6. Chunks stored in rag_chunks table with ACL columns + embedding
 ```
 
 ### ACL-Filtered Search
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant Bridge as yt_sync/rag_bridge
-    participant Core as RAG Core
-    participant Store as PgVectorStore
-    participant DB as PostgreSQL
-
-    Client->>Bridge: Search with Django user context
-    Bridge->>Core: Convert to QueryACLContext
-    Core->>Store: search_chunks(query, acl_context)
-    Store->>DB: Vector search + ACL SQL filter
-    DB-->>Store: Filtered results
-    Store-->>Core: Authorized chunks
-    Core-->>Client: Search results
 ```
+1. Django view receives search query + user context
+   ↓
+2. rag_bridge.py creates QueryACLContext from Django User
+   ↓
+3. QueryACLContext resolves user's group memberships
+   ↓
+4. PostgresPGVectorStore.similarity_search_with_acl()
+   ↓
+5. Build SQL with ACL WHERE clause:
+   - visibility = PUBLIC OR
+   - (visibility = PRIVATE AND owner_id = user_id) OR
+   - (visibility = GROUP AND allowed_groups && user_groups)
+   ↓
+6. Execute vector similarity + ACL filter in single query
+   ↓
+7. Return filtered chunks
+```
+
+## Integration Points
+
+### 1. Django Authentication → RAG ACL
+**Location**: `yt_sync/rag_bridge.py`
+
+Responsibilities:
+- Convert `request.user` to `QueryACLContext`
+- Resolve Django group memberships to group IDs
+- Handle anonymous users (public-only access)
+
+### 2. RAG Core → pgvector Storage
+**Location**: `rag/stores/pgvector.py`
+
+Responsibilities:
+- Translate ACLFilter to SQL WHERE clauses
+- Use PostgreSQL array operators for group checks (`&&`)
+- Combine ACL filtering with vector similarity (`<=>` operator)
+
+### 3. Document Lifecycle → Chunk ACL Sync
+**Location**: `rag/stores/pgvector.py`
+
+Responsibilities:
+- On document creation: propagate ACL to new chunks
+- On document update: update ACL on existing chunks
+- On document deletion: cascade to chunks (via foreign key)
+
+### 4. Database Schema
+**Location**: Migration file
+
+Responsibilities:
+- Add ACL columns to `rag_documents` and `rag_chunks`
+- Create indexes on `(visibility, owner_id)` for query performance
+- Create GIN index on `allowed_groups` array for group checks
 
 ## Security Considerations
 
-1. **Default Deny**: Unknown users receive no results (empty set)
-2. **SQL Injection Prevention**: All parameters use parameterized queries
-3. **Ownership Validation**: Owner ID verified at storage time
-4. **Array Operations**: PostgreSQL native operators prevent injection
-5. **Visibility Enforcement**: Database-level filtering ensures no leakage
+1. **Default-Deny**: All searches require QueryACLContext; no implicit public access
+2. **Group Resolution**: Groups resolved at query time to prevent stale permissions
+3. **SQL Injection**: Use parameterized queries for ACL filters
+4. **Index Coverage**: Indexes on ACL columns prevent table scans on large datasets
 
-## Performance Characteristics
+## Performance Notes
 
-**Expected Performance**:
-- ACL filtering adds <5ms overhead for typical queries
-- GIN indexes provide O(log n) array containment checks
-- Vector similarity search remains the bottleneck
-- Scales to millions of chunks with proper indexing
-
-**Optimization Opportunities**:
-- Materialized views for common group combinations
-- Partition tables by visibility level if needed
-- Cache user group memberships in application layer
+1. **Query Performance**: ACL filtering adds minimal overhead due to indexes
+2. **Storage Overhead**: ~40 bytes per chunk for ACL fields
+3. **Group Checks**: PostgreSQL array operator (`&&`) is O(n*m) but fast for small arrays
+4. **Critical Path**: Index on `(visibility, owner_id, allowed_groups)` is essential
 
 ## Testing Strategy
 
-The test suite (task-007) verifies:
-1. **ACL Type Validation**: Pydantic model constraints
-2. **Schema Integration**: Document/Chunk with ACL fields
-3. **Query Filtering**: All visibility levels work correctly
-4. **GDPR Deletion**: Complete user data removal
-5. **Edge Cases**: Empty groups, non-existent users, etc.
-6. **Performance**: Index usage and query efficiency
-7. **Integration**: End-to-end with Django bridge
-
-## Migration Path
-
-**Zero-Downtime Deployment**:
-1. Run migration to create `rag_embeddings` table
-2. Deploy updated RAG code with ACL support
-3. Existing code continues to work (ACL fields nullable initially)
-4. Backfill ACL data for existing documents
-5. Make ACL fields NOT NULL in follow-up migration
-
-**Backward Compatibility**:
-- Chunks without ACL data treated as PUBLIC
-- Existing search API continues to work
-- ACL context optional initially
+1. **Unit Tests**: ACL filter logic, group resolution, visibility rules
+2. **Integration Tests**: End-to-end search with various ACL configurations
+3. **Performance Tests**: Search performance with ACL filtering on 10k+ chunks
+4. **Security Tests**: Verify unauthorized access is blocked

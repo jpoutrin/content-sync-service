@@ -1,37 +1,46 @@
 ---
 id: task-002
-component: rag-core-schemas-update
+component: acl-core-tests
 wave: 1
 deps: []
-blocks: [task-003, task-004]
-agent: python-experts:django-expert
+blocks: [task-003, task-004, task-005]
+agent: python-experts:python-testing-expert
 tech_spec: TS-0001
-contracts: [contracts/acl-types.py, contracts/document-schema.py]
+contracts: [contracts/types.py]
 ---
-# task-002: RAG Core Schemas Update
+# task-002: Unit Tests for ACL Core Module
 
 ## Scope
-CREATE: []
-MODIFY: rag/core/schemas.py
-BOUNDARY: rag/core/__init__.py
+CREATE: rag/core/tests/__init__.py, rag/core/tests/test_acl.py
+MODIFY: (none)
+BOUNDARY: rag/core/acl.py (owned by task-001), rag/core/schemas.py, rag/stores/*
 
 ## Requirements
-- Import Visibility from rag.core.acl (conditional import to avoid circular deps)
-- Add ACL fields to Document:
-  - `owner_id` (str, required)
-  - `visibility` (Visibility, default PRIVATE)
-  - `shared_with_users` (list[str], default [])
-  - `shared_with_groups` (list[str], default [])
-  - `tenant_id` (Optional[str], default None)
-- Add same ACL fields to Chunk model (denormalized from Document)
-- Add `from_document()` classmethod to Chunk that creates chunk inheriting ACL fields from parent Document
-- Update SearchQuery to include acl_context field using forward reference to avoid circular import
+- Test `Visibility` enum values and string conversion
+- Test `QueryACLContext` required fields validation (missing principal_id raises error)
+- Test `QueryACLContext` default values for optional fields
+- Test `QueryACLContext.system_context()` factory method returns bypass_acl=True
+- Test `ACLFilterSpec.to_sql_conditions()` output format is tuple[str, list]
+- Test SQL generation for various ACL scenarios:
+  - Owner only (no groups, no sharing)
+  - With group memberships
+  - With tenant isolation
+  - System context (bypass)
+- Test parameter ordering and count matches SQL placeholders
+- Verify SQL injection protection with malicious inputs (e.g., "'; DROP TABLE--")
+- Use pytest fixtures for reusable test data
+- Minimum 90% code coverage for rag/core/acl.py
 
 ## Checklist
-- [ ] Document model has all 5 ACL fields with correct types and defaults
-- [ ] Chunk model has all 5 ACL fields with correct types and defaults
-- [ ] Chunk.from_document() copies owner_id, visibility, shared_with_users (copy), shared_with_groups (copy), tenant_id
-- [ ] SearchQuery has acl_context field (can be Optional for backward compat initially)
-- [ ] Visibility import uses TYPE_CHECKING guard or late import to prevent circular dependency
-- [ ] All new fields have Field() with description
-- [ ] Existing fields preserved (id, content, metadata, source_id, etc.)
+- [ ] test_visibility_enum_values() passes
+- [ ] test_visibility_enum_string_conversion() passes
+- [ ] test_query_acl_context_required_fields() passes
+- [ ] test_query_acl_context_defaults() passes
+- [ ] test_system_context_bypass() passes
+- [ ] test_acl_filter_spec_basic_sql() passes
+- [ ] test_acl_filter_spec_with_groups() passes
+- [ ] test_acl_filter_spec_with_tenant() passes
+- [ ] test_sql_injection_protection() passes
+- [ ] pytest rag/core/tests/test_acl.py passes
+- [ ] Coverage >= 90% for rag/core/acl.py
+- [ ] No files modified outside scope
