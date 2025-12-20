@@ -71,3 +71,8 @@ supabase/.temp/
 # Node modules (for Supabase CLI)
 node_modules/
 .claude-task-complete
+
+# Parallel, temporary folders.
+parallel/**/worktrees/
+parallel/**/logs/
+
