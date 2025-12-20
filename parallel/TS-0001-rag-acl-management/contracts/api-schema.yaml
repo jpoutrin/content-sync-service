@@ -1,0 +1,16 @@
+# API Schema for TS-0001: RAG ACL Management
+#
+# NOTE: This technical specification is a Python-only implementation
+# that adds ACL (Access Control List) filtering to the RAG module's
+# internal data models and vector store interface.
+#
+# There are NO REST API changes, GraphQL endpoints, or external API
+# contracts introduced by this work.
+#
+# All ACL enforcement happens at the:
+# - Data model layer (Document and Chunk schemas)
+# - Vector store interface layer (search method signature)
+# - Internal Python API surface
+#
+# External APIs remain unchanged and will consume these internal
+# ACL capabilities through existing endpoints in future work.
