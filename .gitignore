@@ -75,4 +75,5 @@ node_modules/
 # Parallel, temporary folders.
 parallel/**/worktrees/
 parallel/**/logs/
+parallel/**/execution-report.md
 
