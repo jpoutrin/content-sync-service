@@ -68,7 +68,8 @@ select = [
     "B",      # flake8-bugbear
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
-    "DJ",     # flake8-django
+    "DJ",     # flake8-django,
+    "RUF022",
 ]
 ignore = [
     "E501",   # line too long (handled by formatter)
