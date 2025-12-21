@@ -1,12 +1,14 @@
 ---
 tech_spec_id: TS-0002
 title: RAG Transcript Ingestion & Search
-status: DRAFT
+status: APPROVED
 author: ""
-reviewers: []
+reviewers:
+  - name: Jeremie
+    status: approved
 created: 2025-12-21
 last_updated: 2025-12-21
-approved_date: ""
+approved_date: 2025-12-21
 decision_ref: ""
 related_rfcs:
   - RFC-0001 (RAG ACL Management)

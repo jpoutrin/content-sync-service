@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  title: RAG Search API
+  version: 1.0.0
+  description: Semantic search API for transcript content with ACL enforcement
+
+paths:
+  /api/rag/search:
+    get:
+      summary: Search transcript content
+      description: Semantic search across indexed transcripts with ACL enforcement
+      operationId: searchTranscripts
+      security:
+        - bearerAuth: []
+        - sessionAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query text
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+        - name: top_k
+          in: query
+          required: false
+          description: Number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 5
+        - name: min_score
+          in: query
+          required: false
+          description: Minimum similarity score threshold
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 1.0
+            default: 0.0
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+        '400':
+          description: Invalid request (missing or invalid query parameters)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error (embedding or database failure)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT token
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+      description: Django session cookie
+
+  schemas:
+    SearchResponse:
+      type: object
+      required:
+        - query
+        - results
+        - total
+      properties:
+        query:
+          type: string
+          description: Original query text
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResultItem'
+        total:
+          type: integer
+          description: Number of results returned
+
+    SearchResultItem:
+      type: object
+      required:
+        - chunk_id
+        - content
+        - score
+        - video_id
+        - video_title
+        - video_url
+        - start_time
+        - end_time
+      properties:
+        chunk_id:
+          type: string
+          description: Unique chunk identifier
+          example: "video:123e4567-e89b-12d3-a456-426614174000:chunk:0"
+        content:
+          type: string
+          description: Transcript segment text
+        score:
+          type: number
+          format: float
+          description: Similarity score (0-1)
+          minimum: 0.0
+          maximum: 1.0
+        video_id:
+          type: string
+          description: YouTube video ID
+          example: "dQw4w9WgXcQ"
+        video_title:
+          type: string
+          description: Video title
+        video_url:
+          type: string
+          format: uri
+          description: YouTube video URL
+        start_time:
+          type: number
+          format: float
+          description: Start time in seconds
+        end_time:
+          type: number
+          format: float
+          description: End time in seconds
+        timestamp_url:
+          type: string
+          format: uri
+          description: YouTube URL with timestamp parameter
+          example: "https://youtube.com/watch?v=dQw4w9WgXcQ&t=45"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+        detail:
+          type: string
+          description: Additional error details

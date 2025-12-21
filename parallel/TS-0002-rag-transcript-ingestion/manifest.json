@@ -1,0 +1,68 @@
+{
+  "tech_spec_id": "TS-0002",
+  "name": "rag-transcript-ingestion",
+  "technology": "python",
+  "python_version": "3.12",
+  "dependencies": {
+    "python": {
+      "add": ["sentence-transformers>=2.2.0"],
+      "upgrade": ["litellm>=1.30.0"],
+      "remove": [],
+      "add_dev": []
+    }
+  },
+  "waves": [
+    {
+      "number": 1,
+      "name": "Core Components",
+      "tasks": [
+        { "id": "task-001", "component": "chunker", "agent": "python-experts:django-expert" },
+        { "id": "task-002", "component": "embedder", "agent": "python-experts:django-expert" },
+        { "id": "task-003", "component": "config", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "python -c \"from rag.chunkers import TranscriptChunker; from rag.embedders import LiteLLMEmbedder; print('Wave 1 OK')\""
+    },
+    {
+      "number": 2,
+      "name": "Services",
+      "tasks": [
+        { "id": "task-004", "component": "ingestion-service", "agent": "python-experts:django-expert" },
+        { "id": "task-005", "component": "retriever", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "python -c \"from rag.services import IngestionService; from rag.retrievers import DefaultRetriever; print('Wave 2 OK')\""
+    },
+    {
+      "number": 3,
+      "name": "API and CLI",
+      "tasks": [
+        { "id": "task-006", "component": "search-api", "agent": "python-experts:django-expert" },
+        { "id": "task-007", "component": "cli-search", "agent": "python-experts:django-expert" },
+        { "id": "task-008", "component": "cli-ingest", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "python manage.py check && python -c \"from rag.api.views import SearchView; print('Wave 3 OK')\""
+    },
+    {
+      "number": 4,
+      "name": "Integration",
+      "tasks": [
+        { "id": "task-009", "component": "auto-ingest-signal", "agent": "python-experts:django-expert" },
+        { "id": "task-010", "component": "admin-interface", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "python manage.py check && python -c \"from yt_sync.signals import transcript_saved; print('Wave 4 OK')\""
+    },
+    {
+      "number": 5,
+      "name": "Security Tests",
+      "tasks": [
+        { "id": "task-011", "component": "acl-security-tests", "agent": "python-experts:python-testing-expert" }
+      ],
+      "validation": "python -m pytest rag/tests/test_acl_security.py -v"
+    }
+  ],
+  "metadata": {
+    "tech_spec": "tech-specs/approved/TS-0002-rag-transcript-ingestion.md",
+    "total_tasks": 11,
+    "max_parallel": 3,
+    "critical_path": ["task-001", "task-004", "task-006"]
+  }
+}
