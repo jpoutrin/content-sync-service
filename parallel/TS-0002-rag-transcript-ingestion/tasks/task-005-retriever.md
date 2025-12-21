@@ -1,39 +1,49 @@
 ---
-id: task-005
-component: retriever
+id: task-005-retriever
+component: DefaultRetriever
 wave: 2
-deps: [task-002]
+deps: [task-002, task-003]
+blocks: [task-006, task-007, task-010, task-011]
 agent: python-experts:django-expert
+skills: [python-experts:python-style, python-experts:django-dev, python-experts:django-api, python-experts:documentation-research]
 tech_spec: TS-0002
-contracts: [rag/core/interfaces.py, rag/core/schemas.py, rag/embedders/litellm.py, rag/stores/pgvector.py]
+contracts: [contracts/types.py, contracts/api-schema.yaml]
 ---
-# task-005: Implement DefaultRetriever
+# task-005-retriever: Default Retriever Implementation
 
 ## Scope
-CREATE: rag/retrievers/__init__.py, rag/retrievers/default.py, rag/retrievers/tests/__init__.py, rag/retrievers/tests/test_default.py
-MODIFY: none
-BOUNDARY: rag/core/interfaces.py, rag/core/schemas.py, rag/embedders/*, rag/stores/*, rag/chunkers/*
+CREATE:
+- rag/retrievers/__init__.py
+- rag/retrievers/default.py
+- rag/retrievers/tests/__init__.py
+- rag/retrievers/tests/test_default.py
+
+BOUNDARY:
+- rag/core/* (do not modify)
+- rag/stores/* (do not modify)
+- rag/chunkers/* (do not modify)
 
 ## Requirements
-- Implement `DefaultRetriever` implementing `RetrieverInterface`
-- Constructor accepts `embedder`, `store`
-- Implement `retrieve(query: SearchQuery) -> list[SearchResult]`
-- Generate query embedding using `embedder.embed(query.text)`
-- Call `store.search` with ACL context from query
-- Enrich results with `timestamp_url`: `https://youtube.com/watch?v={youtube_video_id}&t={start_time}`
-- Respect `query.min_score` and `query.top_k` when calling store
-- Gracefully handle missing `youtube_video_id` in chunk metadata (skip timestamp_url)
-- Return empty list if no results found
+- Implement RetrieverInterface from rag/core/interfaces.py
+- Implement retrieve(SearchQuery) -> list[SearchResult]
+- Embed query text using configured embedder
+- Search vector store with ACL context
+- Enrich results with timestamp_url metadata
+- Format timestamp_url as: {video_url}&t={start_time}s
+- Support top_k and min_score filtering
+- Handle bypass_acl for admin queries
+- Return results sorted by score (descending)
 
 ## Checklist
-- [ ] `DefaultRetriever` implements `RetrieverInterface.retrieve(query)`
-- [ ] Constructor accepts `embedder`, `store` parameters
-- [ ] Query embedding generated via `embedder.embed(query.text)`
-- [ ] `store.search` called with correct parameters including `acl_context`
-- [ ] `_enrich_results` helper adds `timestamp_url` when `youtube_video_id` exists
-- [ ] `timestamp_url` format: `https://youtube.com/watch?v={id}&t={seconds}`
-- [ ] Missing `youtube_video_id` handled gracefully (no `timestamp_url` field)
-- [ ] Empty results return empty list (no errors)
-- [ ] `query.min_score` and `query.top_k` passed to store.search
-- [ ] Tests mock `embedder` and `store`
-- [ ] Test coverage >= 90%
+- [ ] DefaultRetriever implements RetrieverInterface
+- [ ] retrieve() method works correctly
+- [ ] Query embedding works
+- [ ] Vector search respects ACL
+- [ ] timestamp_url format correct
+- [ ] top_k filtering works
+- [ ] min_score filtering works
+- [ ] bypass_acl supported
+- [ ] Results sorted by score
+- [ ] Unit tests pass
+- [ ] Type hints complete
+- [ ] Docstrings written

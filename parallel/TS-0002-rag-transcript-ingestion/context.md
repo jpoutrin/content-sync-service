@@ -1,170 +1,254 @@
-# RAG Transcript Ingestion & Search - Parallel Development Context
-
-## Tech Spec Reference
-- **ID**: TS-0002
-- **Title**: RAG Transcript Ingestion & Search
-- **Source**: tech-specs/approved/TS-0002-rag-transcript-ingestion.md
+# Context: TS-0002 RAG Transcript Ingestion & Search
 
 ## Project Overview
-Django-based content synchronization service implementing transcript ingestion and semantic search capabilities for the RAG module.
+
+The Content Sync Service is a Django-based application for synchronizing and processing content from multiple sources (primarily YouTube). This tech spec implements a Retrieval-Augmented Generation (RAG) system for ingesting video transcripts, chunking them semantically, generating embeddings, storing them in a vector database, and enabling semantic search with ACL enforcement.
 
 ## Tech Stack
+
 - **Framework**: Django 5.0
-- **Python**: 3.12
-- **Database**: PostgreSQL (via Supabase) with pgvector extension
-- **Task Queue**: Django-Q (ORM backend)
-- **API**: Django REST Framework
+- **Python Version**: 3.12
+- **Database**: PostgreSQL with pgvector extension (via Supabase)
+- **Task Queue**: Django-Q (ORM backend for async task processing)
+- **Vector Store**: PostgreSQL with pgvector extension
+- **Embeddings**: LiteLLM (for API-based models) and sentence-transformers (for local models)
+- **Testing**: pytest with pytest-django, factory-boy for fixtures
+- **Configuration**: django-environ for environment variable management
 
-## Existing Infrastructure (from TS-0001)
+## Existing Modules
 
-### Core Interfaces (rag/core/interfaces.py)
-- `ChunkerInterface`: Abstract base for document chunking strategies
-- `EmbedderInterface`: Abstract base for embedding generation
-  - `embed(text: str) -> list[float]` - single text embedding
-  - `embed_batch(texts: list[str]) -> list[list[float]]` - batch embedding
-- `VectorStoreInterface`: Abstract base for vector storage and search
-- `RetrieverInterface`: High-level interface combining embedding and search
+### RAG Core Module (`rag/core/`)
 
-### Schemas (rag/core/schemas.py)
-- `Document`: Source document with ACL fields (owner_id, visibility, shared_with_users, shared_with_groups, tenant_id)
-- `Chunk`: Text segment with inherited ACL fields, uses `Chunk.from_document()` for ACL inheritance
-- `Embedding`: Vector representation with chunk_id, vector, model, dimensions
-- `SearchQuery`: Query with text, top_k, min_score, filters, acl_context
-- `SearchResult`: Result with chunk, score, document_metadata
+**Interfaces** - All interfaces are abstract base classes with type hints:
 
-### ACL System (rag/core/acl.py)
-- `Visibility`: Enum (PRIVATE, SHARED, INTERNAL, PUBLIC)
-- `QueryACLContext`: Context with principal_id, member_of_groups, tenant_id, bypass_acl
-- `ACLFilterSpec`: SQL filter generation for pgvector ACL filtering
+- `ChunkerInterface`: Abstract interface for chunking documents
+  - `chunk(document: Document) -> List[Chunk]`
 
-### Vector Store (rag/stores/pgvector.py)
-- `PgVectorStore`: PostgreSQL pgvector implementation with ACL-filtered search
-- Uses cosine distance for similarity
-- Supports upsert, batch operations, and document deletion
+- `EmbedderInterface`: Abstract interface for generating embeddings
+  - `embed(texts: List[str]) -> List[Embedding]`
+  - `embed_query(query: str) -> Embedding`
 
-## YouTube Sync Models (yt_sync/models.py)
+- `VectorStoreInterface`: Abstract interface for vector storage operations
+  - `store(chunks: List[Chunk], embeddings: List[Embedding], metadata: Dict[str, Any])`
+  - `search(query_embedding: Embedding, top_k: int, filters: Optional[ACLFilterSpec]) -> List[SearchResult]`
 
-### User Model
-- UUID primary key
-- Custom user model
+- `RetrieverInterface`: Abstract interface for retrieval operations
+  - `retrieve(query: SearchQuery) -> List[SearchResult]`
 
-### Source Model
-- `id`: UUID primary key
-- `user`: ForeignKey to User (owner)
-- `type`: CHANNEL or PLAYLIST
-- `youtube_id`: Channel/playlist ID
-- `title`, `url`, `status`
+**Schemas** (`rag/core/schemas.py`) - Pydantic models:
 
-### Video Model
-- `id`: UUID primary key
-- `source`: ForeignKey to Source
-- `youtube_video_id`: Unique YouTube video ID
-- `title`, `url`, `duration`, `published_at`
-- `transcript_text`: Full transcript text
-- `transcript_data`: JSONField with timed segments [{"text": str, "start": float, "duration": float}]
-- `transcript_status`: PENDING, PROCESSING, COMPLETED, FAILED
+- `Document`: Represents a source document
+  - `id: str`
+  - `content: str`
+  - `metadata: Dict[str, Any]`
+  - `source_type: str`
+  - `source_id: str`
 
-## Key Implementation Notes
+- `Chunk`: Represents a chunk of a document
+  - `id: str`
+  - `content: str`
+  - `document_id: str`
+  - `chunk_index: int`
+  - `metadata: Dict[str, Any]`
 
-### Chunk ID Convention
+- `Embedding`: Represents a vector embedding
+  - `vector: List[float]`
+  - `model: str`
+  - `dimensions: int`
+
+- `SearchQuery`: Represents a search query
+  - `query_text: str`
+  - `top_k: int`
+  - `filters: Optional[ACLFilterSpec]`
+  - `acl_context: Optional[QueryACLContext]`
+
+- `SearchResult`: Represents a search result
+  - `chunk: Chunk`
+  - `score: float`
+  - `document_metadata: Dict[str, Any]`
+
+**ACL System** (`rag/core/acl.py`):
+
+- `Visibility` enum: `PUBLIC`, `PRIVATE`, `SHARED`
+- `QueryACLContext`: Context for ACL enforcement
+  - `user_id: Optional[str]`
+  - `org_id: Optional[str]`
+  - `user_roles: List[str]`
+
+- `ACLFilterSpec`: Specification for ACL filtering
+  - `visibility: Optional[Visibility]`
+  - `owner_id: Optional[str]`
+  - `org_id: Optional[str]`
+  - `allowed_user_ids: Optional[List[str]]`
+
+**Vector Store** (`rag/stores/pgvector.py`):
+
+- `PgVectorStore`: PostgreSQL-based vector store with ACL filtering
+  - Implements `VectorStoreInterface`
+  - Uses raw SQL with pgvector operators for efficient vector search
+  - ACL filtering happens at SQL level using WHERE clauses
+  - Supports cosine similarity search with `<=>` operator
+  - Table: `rag_vector_chunks` with columns:
+    - `id`, `chunk_id`, `document_id`, `content`, `embedding`, `metadata`
+    - `visibility`, `owner_id`, `org_id`, `allowed_user_ids`
+
+### YouTube Sync Module (`yt_sync/`)
+
+**Models** (`yt_sync/models.py`):
+
+- `User`: Django user model with Supabase integration
+  - `id: UUID`
+  - `email: str`
+  - `org_id: Optional[UUID]`
+
+- `Source`: YouTube channel or playlist source
+  - `id: UUID`
+  - `source_type: str` (channel/playlist)
+  - `source_id: str` (YouTube ID)
+  - `visibility: str`
+  - `owner: ForeignKey(User)`
+
+- `Video`: YouTube video metadata
+  - `id: UUID`
+  - `video_id: str` (YouTube ID)
+  - `title: str`
+  - `description: str`
+  - `transcript: Optional[str]`
+  - `source: ForeignKey(Source)`
+  - `visibility: str`
+  - `owner: ForeignKey(User)`
+
+## Dependencies
+
+**Already Installed**:
+- `litellm` - For API-based embedding models
+- `pydantic>=2.0` - For data validation and schemas
+- `psycopg2-binary` - PostgreSQL adapter
+- `pgvector` - PostgreSQL vector extension client
+- `django-q2` - Task queue
+- `djangorestframework` - REST API framework
+- `django-environ` - Environment variable management
+- `pytest`, `pytest-django` - Testing framework
+- `factory-boy` - Test fixture factory
+
+**New Dependency to Add**:
+- `sentence-transformers>=2.2.0` - For local embedding models (e.g., all-MiniLM-L6-v2)
+
+## Authentication & Authorization
+
+The service uses dual authentication via Django REST Framework:
+
+1. **SupabaseAuthentication**: JWT-based authentication for Supabase users
+   - Validates JWT tokens from Supabase
+   - Extracts user context (user_id, org_id, roles)
+
+2. **SessionAuthentication**: Cookie-based authentication for Django admin
+   - Standard Django session authentication
+   - Used for admin interface
+
+All API endpoints use `SupabaseAuthentication` for access control. The ACL system enforces permissions at the query level based on the authenticated user's context.
+
+## Configuration
+
+The project uses `django-environ` for environment variables. Key settings:
+
+- `SUPABASE_URL`: Supabase project URL
+- `SUPABASE_KEY`: Supabase anonymous key
+- `SUPABASE_JWT_SECRET`: Secret for JWT validation
+- `DATABASE_URL`: PostgreSQL connection string
+- `EMBEDDING_MODEL`: Model name for embeddings (e.g., "all-MiniLM-L6-v2")
+- `CHUNK_SIZE`: Default chunk size for transcript chunking
+- `CHUNK_OVERLAP`: Overlap size between chunks
+
+## Testing Strategy
+
+- **Framework**: pytest with pytest-django
+- **Fixtures**: factory-boy for creating test data
+- **Test Structure**:
+  - Unit tests for individual components (chunkers, embedders, retrievers)
+  - Integration tests for services (ingestion, search)
+  - API tests for endpoints
+  - Security tests for ACL enforcement
+
+**Key Test Scenarios**:
+- ACL filtering prevents unauthorized access
+- Chunk boundaries respect semantic units
+- Embeddings are generated correctly
+- Search results respect visibility rules
+- Signal handlers trigger ingestion correctly
+
+## File Organization
+
 ```
-video:{video_pk}:chunk:{chunk_index}
-Example: video:123e4567-e89b-12d3-a456-426614174000:chunk:0
-```
-
-### Document ID Convention
-```
-video:{video_pk}
-Example: video:123e4567-e89b-12d3-a456-426614174000
-```
-
-### ACL Inheritance
-Chunks inherit ACL fields from parent Document using `Chunk.from_document()`:
-```python
-chunk = Chunk.from_document(
-    document,
-    id=f"video:{video_id}:chunk:{index}",
-    document_id=document.id,
-    content=chunk_text,
-    index=index,
-    metadata={"start_time": start, "end_time": end, ...}
-)
-```
-
-### Transcript Data Format
-```python
-[
-    {"text": "Hello and welcome", "start": 0.0, "duration": 2.0},
-    {"text": "to this tutorial", "start": 2.0, "duration": 1.5},
-    {"text": "Let's talk about", "start": 6.5, "duration": 3.0},  # gap > 2.0s
-]
-```
-
-### Embedding Dimensions
-- Local (sentence-transformers/all-MiniLM-L6-v2): 384 dimensions
-- OpenAI (text-embedding-3-small): 1536 dimensions
-
-## Configuration Settings (to be added in task-003)
-```python
-RAG_EMBEDDING_PROVIDER = env('RAG_EMBEDDING_PROVIDER', default='local')
-RAG_EMBEDDING_MODEL = env('RAG_EMBEDDING_MODEL', default='sentence-transformers/all-MiniLM-L6-v2')
-RAG_AUTO_INGEST = env.bool('RAG_AUTO_INGEST', default=True)
-RAG_CHUNK_GAP_THRESHOLD = env.float('RAG_CHUNK_GAP_THRESHOLD', default=2.0)
-RAG_CHUNK_MAX_CHARS = env.int('RAG_CHUNK_MAX_CHARS', default=1000)
-RAG_CHUNK_MIN_CHARS = env.int('RAG_CHUNK_MIN_CHARS', default=100)
-RAG_EMBEDDING_BATCH_SIZE = env.int('RAG_EMBEDDING_BATCH_SIZE', default=50)
-```
-
-## Directory Structure
-```
-rag/
-├── core/                    # Existing - interfaces, schemas, ACL
-│   ├── __init__.py
-│   ├── acl.py
-│   ├── interfaces.py
-│   └── schemas.py
-├── stores/                  # Existing - PgVectorStore
-│   └── pgvector.py
-├── chunkers/                # NEW - task-001
-│   ├── __init__.py
-│   ├── transcript.py
-│   └── tests/
-├── embedders/               # NEW - task-002
-│   ├── __init__.py
-│   ├── litellm.py
-│   └── tests/
-├── services/                # NEW - task-004
-│   ├── __init__.py
-│   ├── ingestion.py
-│   └── tests/
-├── retrievers/              # NEW - task-005
-│   ├── __init__.py
-│   ├── default.py
-│   └── tests/
-├── api/                     # NEW - task-006
-│   ├── __init__.py
-│   ├── views.py
-│   ├── serializers.py
-│   ├── urls.py
-│   └── tests/
-├── management/              # NEW - tasks 007-008
-│   └── commands/
-│       ├── rag_search.py
-│       ├── rag_ingest.py
-│       └── tests/
-├── admin.py                 # MODIFY - task-010
-└── tests/                   # NEW - task-011
-    ├── __init__.py
-    ├── conftest.py
-    └── test_acl_security.py
-
-yt_sync/
-├── signals.py               # NEW - task-009
-├── apps.py                  # MODIFY - task-009
+content-sync-service/
+├── rag/
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── interfaces.py          # Abstract interfaces
+│   │   ├── schemas.py              # Pydantic models
+│   │   └── acl.py                  # ACL system
+│   ├── stores/
+│   │   ├── __init__.py
+│   │   └── pgvector.py             # Vector store (existing)
+│   ├── chunkers/                   # NEW
+│   │   ├── __init__.py
+│   │   └── transcript.py           # Transcript chunker
+│   ├── embedders/                  # NEW
+│   │   ├── __init__.py
+│   │   └── litellm.py              # LiteLLM embedder
+│   ├── retrievers/                 # NEW
+│   │   ├── __init__.py
+│   │   └── default.py              # Default retriever
+│   ├── services/                   # NEW
+│   │   ├── __init__.py
+│   │   └── ingestion.py            # Ingestion service
+│   ├── api/                        # NEW
+│   │   ├── __init__.py
+│   │   ├── views.py                # API views
+│   │   └── serializers.py          # DRF serializers
+│   └── management/commands/        # NEW
+│       ├── ingest_transcript.py    # CLI ingest
+│       └── search_transcripts.py   # CLI search
+├── yt_sync/
+│   ├── models.py                   # Video, Source models
+│   ├── signals.py                  # NEW - Auto-ingest signal
+│   └── admin.py                    # Admin interface updates
 └── tests/
-    └── test_signals.py      # NEW - task-009
-
-config/
-├── settings.py              # MODIFY - task-003
-└── urls.py                  # MODIFY - task-006
+    └── rag/
+        ├── test_chunker.py
+        ├── test_embedder.py
+        ├── test_ingestion.py
+        ├── test_retriever.py
+        ├── test_search_api.py
+        └── test_acl_security.py
 ```
+
+## Implementation Notes
+
+1. **Chunking Strategy**: Use semantic chunking with overlap to preserve context across chunk boundaries. Respect sentence boundaries and time markers in transcript format.
+
+2. **Embedding Models**: Support both API-based (via LiteLLM) and local (via sentence-transformers) models. Configuration determines which to use.
+
+3. **ACL Enforcement**: All search queries MUST include ACL context. The vector store applies ACL filters at SQL level for performance.
+
+4. **Async Processing**: Ingestion should be async via Django-Q tasks. Signal handlers enqueue tasks rather than blocking.
+
+5. **Error Handling**: All services should handle errors gracefully with proper logging and retry logic for transient failures.
+
+6. **Performance**: Vector search should be optimized with proper indexes on pgvector columns and ACL fields.
+
+## Wave Dependencies
+
+- **Wave 1**: Core components (chunker, embedder, config) - No dependencies
+- **Wave 2**: Services (ingestion, retriever) - Depends on Wave 1
+- **Wave 3**: APIs and CLI - Depends on Wave 2
+- **Wave 4**: Automation (signals, admin) - Depends on Wave 3
+- **Wave 5**: Security testing - Depends on all previous waves
+
+## Key Contracts
+
+All contracts are defined in `contracts/` subdirectory:
+- `types.py`: Shared type definitions and Pydantic models
+- `api-schema.yaml`: OpenAPI schema for REST endpoints
+
+Agents should import from contracts rather than redefining types.

@@ -1,262 +1,430 @@
-# Task Dependency Graph - TS-0002 RAG Transcript Ingestion
+# Task Dependency Graph: TS-0002 RAG Transcript Ingestion
 
-## Task Dependency Diagram
+## Wave Overview
+
+| Wave | Tasks | Description | Parallelism | Est. Time |
+|------|-------|-------------|-------------|-----------|
+| 1 | task-001, task-002, task-003 | Core components (chunker, embedder, config) | 3 | 4-6 hours |
+| 2 | task-004, task-005 | Service layer (ingestion, retrieval) | 2 | 6-8 hours |
+| 3 | task-006, task-007, task-008 | API & CLI interfaces | 3 | 4-6 hours |
+| 4 | task-009, task-010 | Integration (signal, admin) | 2 | 3-4 hours |
+| 5 | task-011 | Security and ACL tests | 1 | 2-3 hours |
+
+**Total Sequential Time**: 19-27 hours
+**Total Parallel Time**: 8-12 hours (with 3 parallel agents)
+
+## Dependency Diagram
 
 ```mermaid
-graph TD
-    subgraph "Wave 1: Foundation Components"
-        T001[task-001<br/>TranscriptChunker]
-        T002[task-002<br/>LiteLLMEmbedder]
-        T003[task-003<br/>RAGConfig]
+graph LR
+    subgraph Wave1["Wave 1: Core Components"]
+        T1[task-001<br/>TranscriptChunker]
+        T2[task-002<br/>LiteLLMEmbedder]
+        T3[task-003<br/>RAG Config]
     end
 
-    subgraph "Wave 2: Service Layer"
-        T004[task-004<br/>IngestionService]
-        T005[task-005<br/>DefaultRetriever]
+    subgraph Wave2["Wave 2: Service Layer"]
+        T4[task-004<br/>IngestionService]
+        T5[task-005<br/>DefaultRetriever]
     end
 
-    subgraph "Wave 3: User Interfaces"
-        T006[task-006<br/>Search API]
-        T007[task-007<br/>CLI Search]
-        T008[task-008<br/>CLI Ingest]
+    subgraph Wave3["Wave 3: Interfaces"]
+        T6[task-006<br/>Search API]
+        T7[task-007<br/>CLI Search]
+        T8[task-008<br/>CLI Ingest]
     end
 
-    subgraph "Wave 4: Automation & Admin"
-        T009[task-009<br/>Auto-Ingestion]
-        T010[task-010<br/>Admin Interface]
+    subgraph Wave4["Wave 4: Integration"]
+        T9[task-009<br/>Auto-Ingest Signal]
+        T10[task-010<br/>Admin Interface]
     end
 
-    subgraph "Wave 5: Security Validation"
-        T011[task-011<br/>ACL Tests]
+    subgraph Wave5["Wave 5: Security"]
+        T11[task-011<br/>ACL Tests]
     end
 
-    T001 --> T004
-    T002 --> T004
-    T003 --> T004
-    T002 --> T005
-    T003 --> T005
+    %% Wave 1 -> Wave 2 dependencies
+    T1 --> T4
+    T2 --> T4
+    T2 --> T5
+    T3 --> T4
+    T3 --> T5
+    T3 --> T9
 
-    T005 --> T006
-    T005 --> T007
-    T004 --> T008
+    %% Wave 2 -> Wave 3 dependencies
+    T4 --> T8
+    T5 --> T6
+    T5 --> T7
 
-    T004 --> T009
-    T005 --> T010
+    %% Wave 2 -> Wave 4 dependencies
+    T4 --> T9
+    T4 --> T10
+    T5 --> T10
 
-    T004 --> T011
-    T005 --> T011
-    T006 --> T011
+    %% Wave 3/4 -> Wave 5 dependencies
+    T4 --> T11
+    T5 --> T11
+    T6 --> T11
 
-    classDef critical fill:#ff6b6b,stroke:#c92a2a,stroke-width:3px
-    classDef wave1 fill:#fff4e1,stroke:#f59f00
-    classDef wave2 fill:#e1f5ff,stroke:#1971c2
-    classDef wave3 fill:#d3f9d8,stroke:#2f9e44
-    classDef wave4 fill:#f3e5f5,stroke:#7b1fa2
-    classDef wave5 fill:#ffe0e0,stroke:#c92a2a
-
-    class T001,T002,T003 wave1
-    class T004,T005 wave2
-    class T006,T007,T008 wave3
-    class T009,T010 wave4
-    class T011 wave5
-    class T001,T004,T006 critical
+    style T1 fill:#c8e6c9
+    style T2 fill:#c8e6c9
+    style T3 fill:#c8e6c9
+    style T4 fill:#bbdefb
+    style T5 fill:#bbdefb
+    style T6 fill:#fff9c4
+    style T7 fill:#fff9c4
+    style T8 fill:#fff9c4
+    style T9 fill:#ffccbc
+    style T10 fill:#ffccbc
+    style T11 fill:#f8bbd0
 ```
 
-## Wave Breakdown
+## Detailed Task Dependencies
 
-### Wave 1: Foundation Components (Parallel Execution)
-**Tasks**: task-001, task-002, task-003
-**Dependencies**: None
-**Parallelizable**: Yes - all three tasks can run simultaneously
+### Wave 1: Core Components (Parallel: 3)
 
-| Task ID | Component | Description | Estimated Effort |
-|---------|-----------|-------------|------------------|
-| task-001 | TranscriptChunker | Timestamp-based chunking logic | 4 hours |
-| task-002 | LiteLLMEmbedder | Embedding provider abstraction | 3 hours |
-| task-003 | RAGConfig | Configuration management | 2 hours |
+**task-001-chunker** (TranscriptChunker)
+- **Depends on**: None (foundation task)
+- **Blocks**: task-004 (IngestionService needs chunker)
+- **Deliverables**:
+  - `rag/chunkers/transcript.py`
+  - `rag/tests/test_chunker.py`
+  - Database migration for chunks model
+- **Validation**: Unit tests with various timestamp patterns
 
-**Completion Criteria**: All three components implemented with unit tests passing.
+**task-002-embedder** (LiteLLMEmbedder)
+- **Depends on**: None (foundation task)
+- **Blocks**: task-004 (ingestion), task-005 (retrieval)
+- **Deliverables**:
+  - `rag/embedders/litellm.py`
+  - `rag/tests/test_embedder.py`
+  - Model configuration and caching
+- **Validation**: Test with both local and OpenAI models
 
-### Wave 2: Service Layer (Parallel Execution)
-**Tasks**: task-004, task-005
-**Dependencies**: Wave 1 complete
-**Parallelizable**: Yes - both services can be developed simultaneously
+**task-003-config** (RAG Configuration)
+- **Depends on**: None (foundation task)
+- **Blocks**: task-004, task-005, task-009 (all services use config)
+- **Deliverables**:
+  - `rag/config.py`
+  - Settings in `config/settings.py`
+  - Environment variable documentation
+- **Validation**: Config loading tests, default value tests
 
-| Task ID | Component | Description | Estimated Effort |
-|---------|-----------|-------------|------------------|
-| task-004 | IngestionService | Orchestrates ingestion pipeline | 5 hours |
-| task-005 | DefaultRetriever | Search and retrieval logic | 4 hours |
+### Wave 2: Service Layer (Parallel: 2)
 
-**Completion Criteria**: Services integrate with Wave 1 components, integration tests passing.
+**task-004-ingestion** (IngestionService)
+- **Depends on**: task-001 (chunker), task-002 (embedder), task-003 (config)
+- **Blocks**: task-008 (CLI ingest), task-009 (auto-ingest), task-010 (admin), task-011 (tests)
+- **Deliverables**:
+  - `rag/services/ingestion.py`
+  - `rag/tests/test_ingestion.py`
+  - Transaction management and error handling
+- **Validation**: Integration tests with real database
 
-### Wave 3: User Interfaces (Parallel Execution)
-**Tasks**: task-006, task-007, task-008
-**Dependencies**: Wave 2 complete
-**Parallelizable**: Yes - all three interfaces can be built in parallel
+**task-005-retriever** (DefaultRetriever)
+- **Depends on**: task-002 (embedder), task-003 (config)
+- **Blocks**: task-006 (API), task-007 (CLI search), task-010 (admin), task-011 (tests)
+- **Deliverables**:
+  - `rag/retrievers/default.py`
+  - `rag/tests/test_retriever.py`
+  - ACL integration with QueryACLContext
+- **Validation**: Search tests with ACL enforcement
 
-| Task ID | Component | Description | Estimated Effort |
-|---------|-----------|-------------|------------------|
-| task-006 | Search API | REST endpoint for search | 4 hours |
-| task-007 | CLI Search | Management command for search | 2 hours |
-| task-008 | CLI Ingest | Management command for ingestion | 2 hours |
+### Wave 3: Interfaces (Parallel: 3)
 
-**Completion Criteria**: All interfaces functional with end-to-end tests.
+**task-006-api** (Search API)
+- **Depends on**: task-005 (retriever)
+- **Blocks**: task-011 (API security tests)
+- **Deliverables**:
+  - `rag/api/views.py`
+  - `rag/api/serializers.py`
+  - URL routing in `rag/urls.py`
+  - API documentation
+- **Validation**: API integration tests, schema validation
 
-### Wave 4: Automation & Admin (Parallel Execution)
-**Tasks**: task-009, task-010
-**Dependencies**: Wave 2 complete
-**Parallelizable**: Yes - signal handler and admin can be developed simultaneously
+**task-007-cli-search** (CLI Search Command)
+- **Depends on**: task-005 (retriever)
+- **Blocks**: None (optional interface)
+- **Deliverables**:
+  - `rag/management/commands/rag_search.py`
+  - `rag/tests/test_cli_search.py`
+  - User documentation
+- **Validation**: CLI tests with various options
 
-| Task ID | Component | Description | Estimated Effort |
-|---------|-----------|-------------|------------------|
-| task-009 | Auto-Ingestion | Django-Q signal-triggered tasks | 3 hours |
-| task-010 | Admin Interface | Django admin customization | 3 hours |
+**task-008-cli-ingest** (CLI Ingest Command)
+- **Depends on**: task-004 (ingestion service)
+- **Blocks**: None (optional interface)
+- **Deliverables**:
+  - `rag/management/commands/rag_ingest.py`
+  - `rag/tests/test_cli_ingest.py`
+  - User documentation
+- **Validation**: CLI tests with batch ingestion
 
-**Completion Criteria**: Auto-ingestion triggers correctly, admin interface displays results.
+### Wave 4: Integration (Parallel: 2)
 
-### Wave 5: Security Validation (Sequential)
-**Tasks**: task-011
-**Dependencies**: Waves 2, 3 complete (tasks 004, 005, 006)
-**Parallelizable**: No - requires completed components
+**task-009-signal** (Auto-Ingest Signal)
+- **Depends on**: task-003 (config), task-004 (ingestion service)
+- **Blocks**: task-011 (auto-ingestion tests)
+- **Deliverables**:
+  - Signal handler in `yt_sync/signals.py`
+  - `rag/tests/test_signals.py`
+  - Django-Q task integration
+- **Validation**: Signal tests with mock video saves
 
-| Task ID | Component | Description | Estimated Effort |
-|---------|-----------|-------------|------------------|
-| task-011 | ACL Tests | Multi-tenant security validation | 4 hours |
+**task-010-admin** (Admin Interface)
+- **Depends on**: task-004 (ingestion), task-005 (retriever)
+- **Blocks**: None (UI enhancement)
+- **Deliverables**:
+  - `rag/admin.py`
+  - Admin templates (if custom views)
+  - `rag/tests/test_admin.py`
+- **Validation**: Admin interface manual tests
 
-**Completion Criteria**: All ACL tests pass, no cross-tenant data leakage.
+### Wave 5: Security (Parallel: 1)
+
+**task-011-acl-tests** (ACL Security Tests)
+- **Depends on**: task-004 (ingestion), task-005 (retriever), task-006 (API)
+- **Blocks**: None (final validation)
+- **Deliverables**:
+  - `rag/tests/test_acl_security.py`
+  - Performance benchmarks
+  - Security audit report
+- **Validation**: Comprehensive ACL enforcement tests
 
 ## Critical Path
 
 The critical path determines the minimum time to complete all tasks:
 
 ```
-task-001 (4h) → task-004 (5h) → task-006 (4h) → task-011 (4h) = 17 hours
+task-001 (chunker)
+  → task-004 (ingestion)
+    → task-006 (API)
+      → task-011 (ACL tests)
 ```
 
-**Critical Path Tasks** (highlighted in red on diagram):
-1. **task-001**: TranscriptChunker - required by IngestionService
-2. **task-004**: IngestionService - required by Search API
-3. **task-006**: Search API - required by ACL Tests
+**Critical Path Duration**:
+- task-001: 2 hours
+- task-004: 3 hours
+- task-006: 2 hours
+- task-011: 2 hours
+- **Total**: 9 hours (minimum completion time)
 
-**Optimization Opportunities**:
-- Parallelize Wave 1: Reduce 9h total to 4h elapsed (longest task)
-- Parallelize Wave 2: Reduce 9h total to 5h elapsed (longest task)
-- Parallelize Wave 3: Reduce 8h total to 4h elapsed (longest task)
-- Parallelize Wave 4: Reduce 6h total to 3h elapsed (longest task)
+## Parallelization Strategy
 
-**Optimized Timeline**: ~17 hours elapsed time vs. 36 hours sequential
+### Maximum Parallelism: 3 (Wave 1 and Wave 3)
 
-## Dependency Matrix
+**Optimal Agent Assignment:**
 
-| Task | Depends On | Blocks |
-|------|------------|--------|
-| task-001 | - | task-004 |
-| task-002 | - | task-004, task-005 |
-| task-003 | - | task-004, task-005 |
-| task-004 | task-001, task-002, task-003 | task-008, task-009, task-011 |
-| task-005 | task-002, task-003 | task-006, task-007, task-010, task-011 |
-| task-006 | task-005 | task-011 |
-| task-007 | task-005 | - |
-| task-008 | task-004 | - |
-| task-009 | task-004 | - |
-| task-010 | task-005 | - |
-| task-011 | task-004, task-005, task-006 | - |
+**Agent 1 (Primary Backend):**
+1. task-001 (chunker)
+2. task-004 (ingestion service)
+3. task-008 (CLI ingest)
+4. task-011 (ACL tests)
 
-## Task Execution Strategy
+**Agent 2 (Search & Retrieval):**
+1. task-002 (embedder)
+2. task-005 (retriever)
+3. task-006 (API)
+4. task-010 (admin)
 
-### Recommended Execution Order
+**Agent 3 (Config & Integration):**
+1. task-003 (config)
+2. Wait for task-005 completion
+3. task-007 (CLI search)
+4. task-009 (auto-ingest signal)
 
-1. **Start Wave 1 in parallel** (3 agents):
-   - Agent A: task-001 (TranscriptChunker)
-   - Agent B: task-002 (LiteLLMEmbedder)
-   - Agent C: task-003 (RAGConfig)
+### Synchronization Points
 
-2. **Start Wave 2 in parallel** (2 agents):
-   - Agent A: task-004 (IngestionService)
-   - Agent B: task-005 (DefaultRetriever)
+**Sync Point 1 (End of Wave 1):**
+- All agents must complete tasks 001, 002, 003
+- Contracts validated: chunker output, embedder interface, config schema
+- Proceed to Wave 2
 
-3. **Start Wave 3 in parallel** (3 agents):
-   - Agent A: task-006 (Search API)
-   - Agent B: task-007 (CLI Search)
-   - Agent C: task-008 (CLI Ingest)
+**Sync Point 2 (End of Wave 2):**
+- Agents 1 and 2 must complete tasks 004, 005
+- Integration tests: ingestion + retrieval pipeline
+- Proceed to Wave 3
 
-4. **Start Wave 4 in parallel** (2 agents):
-   - Agent A: task-009 (Auto-Ingestion)
-   - Agent B: task-010 (Admin Interface)
+**Sync Point 3 (End of Wave 3):**
+- All agents complete their interface tasks
+- API contract validation
+- Proceed to Wave 4
 
-5. **Execute Wave 5 sequentially** (1 agent):
-   - Agent A: task-011 (ACL Tests)
+**Sync Point 4 (End of Wave 4):**
+- Integration tasks complete
+- Full system smoke test
+- Proceed to Wave 5
 
-### Contract Synchronization Points
+**Final Sync (End of Wave 5):**
+- Security tests pass
+- All contracts validated
+- Feature complete
 
-Agents must synchronize on contract definitions before proceeding:
-
-- **Before Wave 2**: Confirm `ChunkerInterface`, `EmbedderInterface`, `ConfigInterface`
-- **Before Wave 3**: Confirm `IngestionResult`, `SearchResult` data structures
-- **Before Wave 5**: Confirm all API contracts and test data fixtures
-
-## Risk Mitigation
+## Risk Analysis
 
 ### High-Risk Dependencies
 
-1. **task-002 → task-004, task-005**: LiteLLMEmbedder is used by both services
-   - **Mitigation**: Define clear `EmbedderInterface` contract in contracts/
-   - **Fallback**: Implement mock embedder for testing if LiteLLM integration delayed
+1. **task-002 → task-004, task-005**
+   - **Risk**: Embedder issues block both ingestion and retrieval
+   - **Mitigation**: Prioritize embedder completion, include mock for testing
+   - **Impact**: Critical (blocks 7 downstream tasks)
 
-2. **task-004 → task-011**: ACL tests depend on IngestionService
-   - **Mitigation**: Ensure task-004 includes comprehensive error handling
-   - **Fallback**: Create test fixtures if IngestionService incomplete
+2. **task-004 → task-008, task-009, task-010, task-011**
+   - **Risk**: Ingestion service issues block multiple interfaces
+   - **Mitigation**: Comprehensive unit tests, early integration testing
+   - **Impact**: High (blocks 4 downstream tasks)
 
-### Integration Points
+3. **task-005 → task-006, task-007, task-010, task-011**
+   - **Risk**: Retriever issues block search interfaces
+   - **Mitigation**: Mock retriever for interface development
+   - **Impact**: High (blocks 4 downstream tasks)
 
-1. **Wave 1 → Wave 2**: Contract validation required
-2. **Wave 2 → Wave 3/4**: API stability required
-3. **Wave 3 → Wave 5**: Search endpoint must be functional
+### Low-Risk Dependencies
 
-## Verification Checkpoints
+1. **task-003 → task-004, task-005**
+   - **Risk**: Config issues easy to fix
+   - **Mitigation**: Simple fallback defaults
+   - **Impact**: Low (easy to fix)
+
+2. **task-009, task-010**
+   - **Risk**: Integration tasks are nice-to-have
+   - **Mitigation**: Can be deferred if needed
+   - **Impact**: Low (optional features)
+
+## Contract Validation Points
 
 ### After Wave 1
-- [ ] All interfaces defined in contracts/
-- [ ] Unit tests pass for all components
-- [ ] Mock implementations available for dependent tasks
+- **Chunker Output Schema**: Verify `TranscriptChunk` dataclass structure
+- **Embedder Interface**: Test `embed()` and `embed_batch()` signatures
+- **Config Schema**: Validate all RAG_* settings load correctly
 
 ### After Wave 2
-- [ ] Integration tests pass
-- [ ] Services successfully use Wave 1 components
-- [ ] Database migrations applied
+- **Ingestion Pipeline**: End-to-end test from transcript to pgvector
+- **Search Pipeline**: End-to-end test from query to enriched results
+- **ACL Integration**: Verify QueryACLContext correctly filters videos
 
 ### After Wave 3
-- [ ] End-to-end manual tests successful
-- [ ] API documentation complete
-- [ ] CLI commands functional
+- **API Contract**: OpenAPI schema validation
+- **CLI Contract**: Command-line argument parsing tests
+- **Response Format**: JSON schema validation for all interfaces
 
 ### After Wave 4
-- [ ] Auto-ingestion triggers correctly
-- [ ] Admin interface displays data
-- [ ] Performance benchmarks recorded
+- **Signal Contract**: Verify signal fires on video save
+- **Admin Contract**: Verify admin actions work correctly
+- **Queue Integration**: Verify Django-Q tasks execute properly
 
-### After Wave 5
+### Final Validation
+- **Security Contract**: ACL enforcement tests pass
+- **Performance Contract**: Search latency < 500ms for 90th percentile
+- **Data Integrity**: No orphaned chunks or embeddings
+
+## Integration Testing Strategy
+
+### Wave 1 Integration
+```python
+def test_wave1_integration():
+    # Verify contracts between core components
+    chunker = TranscriptChunker()
+    embedder = LiteLLMEmbedder()
+    config = RAGConfig()
+
+    chunks = chunker.chunk(sample_transcript)
+    embeddings = embedder.embed_batch([c.text for c in chunks])
+
+    assert len(chunks) == len(embeddings)
+    assert embeddings[0].shape == (config.embedding_dimensions,)
+```
+
+### Wave 2 Integration
+```python
+def test_wave2_integration():
+    # Verify end-to-end pipeline
+    video = create_test_video()
+    ingestion_service.ingest(video)
+
+    results = retriever.search("test query", user=test_user)
+
+    assert len(results) > 0
+    assert all(r.video.accessible_by(test_user) for r in results)
+```
+
+### Wave 3 Integration
+```python
+def test_wave3_integration():
+    # Verify all interfaces work
+    api_response = client.post('/api/rag/search/', {'query': 'test'})
+    cli_output = call_command('rag_search', 'test')
+
+    assert api_response.status_code == 200
+    assert 'results' in api_response.json()
+    assert 'results' in cli_output
+```
+
+### Wave 4 Integration
+```python
+def test_wave4_integration():
+    # Verify auto-ingestion and admin
+    video = Video.objects.create(...)
+    video.transcript = "test transcript"
+    video.save()  # Should trigger signal
+
+    # Wait for async task
+    assert TranscriptChunk.objects.filter(video=video).exists()
+
+    # Verify admin
+    admin_client.post(f'/admin/rag/chunk/{chunk.id}/re-ingest/')
+```
+
+### Final Integration
+```python
+def test_final_integration():
+    # Comprehensive end-to-end test
+    # 1. Create video with ACL restrictions
+    # 2. Ingest transcript
+    # 3. Search as different users
+    # 4. Verify ACL enforcement
+    # 5. Verify performance
+    pass
+```
+
+## Rollback Strategy
+
+If critical issues are discovered:
+
+1. **After Wave 1**: Minimal rollback needed (only migrations)
+2. **After Wave 2**: Rollback database migrations, remove models
+3. **After Wave 3**: Rollback API routes, CLI commands
+4. **After Wave 4**: Disconnect signals, hide admin interface
+5. **After Wave 5**: Full feature flag to disable RAG system
+
+## Success Criteria
+
+### Wave 1 Complete
+- [ ] All unit tests pass
+- [ ] Contracts validated
+- [ ] Database migrations applied
+- [ ] No blocking issues
+
+### Wave 2 Complete
+- [ ] Integration tests pass
+- [ ] Ingestion pipeline works end-to-end
+- [ ] Search pipeline works end-to-end
+- [ ] ACL enforcement verified
+
+### Wave 3 Complete
+- [ ] API tests pass
+- [ ] CLI commands work
+- [ ] Documentation updated
+- [ ] No API contract breaks
+
+### Wave 4 Complete
+- [ ] Signal fires correctly
+- [ ] Admin interface functional
+- [ ] Django-Q tasks execute
+- [ ] No integration issues
+
+### Wave 5 Complete (Feature Complete)
 - [ ] All ACL tests pass
-- [ ] Security audit complete
-- [ ] Feature ready for merge
-
-## Estimated Timeline
-
-| Wave | Tasks | Parallel Agents | Elapsed Time | Sequential Time |
-|------|-------|----------------|--------------|-----------------|
-| Wave 1 | 3 | 3 | 4 hours | 9 hours |
-| Wave 2 | 2 | 2 | 5 hours | 9 hours |
-| Wave 3 | 3 | 3 | 4 hours | 8 hours |
-| Wave 4 | 2 | 2 | 3 hours | 6 hours |
-| Wave 5 | 1 | 1 | 4 hours | 4 hours |
-| **Total** | **11** | **-** | **~20 hours** | **36 hours** |
-
-**Note**: Timeline assumes ideal conditions. Add 20-30% buffer for integration debugging and contract alignment.
-
-## Success Metrics
-
-- [ ] All 11 tasks completed
-- [ ] Zero cross-tenant data leakage in tests
-- [ ] Search API responds in <500ms for typical queries
-- [ ] Auto-ingestion processes transcripts within 5 minutes
-- [ ] 100% test coverage for security-critical code paths
+- [ ] Performance benchmarks met
+- [ ] Security audit passed
+- [ ] Ready for production deployment

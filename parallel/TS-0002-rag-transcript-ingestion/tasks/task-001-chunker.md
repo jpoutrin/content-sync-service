@@ -1,38 +1,44 @@
 ---
-id: task-001
-component: chunker
+id: task-001-chunker
+component: TranscriptChunker
 wave: 1
 deps: []
+blocks: [task-004]
 agent: python-experts:django-expert
+skills: [python-experts:python-style, python-experts:django-dev, python-experts:django-api, python-experts:documentation-research]
 tech_spec: TS-0002
-contracts: [rag/core/interfaces.py, rag/core/schemas.py]
+contracts: [contracts/types.py, contracts/api-schema.yaml]
 ---
-# task-001: Implement TranscriptChunker
+# task-001-chunker: Transcript Chunker Implementation
 
 ## Scope
-CREATE: rag/chunkers/__init__.py, rag/chunkers/transcript.py, rag/chunkers/tests/__init__.py, rag/chunkers/tests/test_transcript.py
-MODIFY: none
-BOUNDARY: rag/core/interfaces.py, rag/core/schemas.py, rag/embedders/*, rag/services/*, rag/stores/*
+CREATE:
+- rag/chunkers/__init__.py
+- rag/chunkers/transcript.py
+- rag/chunkers/tests/__init__.py
+- rag/chunkers/tests/test_transcript.py
+
+BOUNDARY:
+- rag/core/* (do not modify)
+- rag/stores/* (do not modify)
+- rag/embedders/* (do not modify)
 
 ## Requirements
-- Implement `TranscriptChunker` class implementing `ChunkerInterface` from `rag.core.interfaces`
-- Parse `transcript_data` from `Document.metadata` (list of `{'text': str, 'start': float, 'duration': float}`)
-- Split transcripts by timestamp gaps (gap_threshold default 2.0s from `settings.RAG_CHUNK_GAP_THRESHOLD`)
-- Respect `max_chars` (default 1000) - split long segments
-- Merge short segments until `min_chars` (default 100)
-- Use `Chunk.from_document()` to inherit ACL fields
-- Include timestamp metadata: `start_time`, `end_time`, `segment_count`, `video_title`, `video_url`, `youtube_video_id`
-- Use chunk ID format: `video:{document.source_id}:chunk:{index}`
-- Handle empty `transcript_data` gracefully (return empty list)
+- Implement ChunkerInterface from rag/core/interfaces.py
+- Chunk transcripts by timestamp gaps (2.0s default threshold)
+- Enforce max_chars (1000) and min_chars (100) constraints
+- Use Chunk.from_document() for ACL inheritance from Document
+- Include timestamp metadata in each chunk
+- Support configurable gap threshold, max_chars, and min_chars
+- Handle edge cases (empty transcripts, single-word chunks, etc.)
 
 ## Checklist
-- [ ] `TranscriptChunker` implements `ChunkerInterface.chunk(document) -> list[Chunk]`
-- [ ] Constructor accepts `gap_threshold`, `max_chars`, `min_chars` with defaults from Django settings
-- [ ] Chunks split when gap between segments > `gap_threshold`
-- [ ] Chunks split when accumulated text > `max_chars`
-- [ ] Short segments merged until reaching `min_chars`
-- [ ] Chunks created using `Chunk.from_document()` to copy ACL fields
-- [ ] `Chunk.metadata` contains: `start_time`, `end_time`, `segment_count`, `video_title`, `video_url`, `youtube_video_id`
-- [ ] Empty `transcript_data` returns empty list (no error)
-- [ ] Tests cover: gap splitting, max_chars splitting, min_chars merging, ACL inheritance
-- [ ] Test coverage >= 90%
+- [ ] TranscriptChunker implements ChunkerInterface correctly
+- [ ] Chunking respects timestamp gaps (configurable threshold)
+- [ ] max_chars and min_chars constraints enforced
+- [ ] ACL inheritance works via Chunk.from_document()
+- [ ] Timestamp metadata included in chunk metadata
+- [ ] Unit tests pass for all scenarios
+- [ ] Edge cases handled (empty input, boundary conditions)
+- [ ] Type hints complete
+- [ ] Docstrings written

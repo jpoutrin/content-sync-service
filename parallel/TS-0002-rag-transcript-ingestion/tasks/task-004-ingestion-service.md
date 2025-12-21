@@ -1,41 +1,52 @@
 ---
-id: task-004
-component: ingestion-service
+id: task-004-ingestion-service
+component: IngestionService
 wave: 2
 deps: [task-001, task-002, task-003]
+blocks: [task-008, task-009, task-010, task-011]
 agent: python-experts:django-expert
+skills: [python-experts:python-style, python-experts:django-dev, python-experts:django-api, python-experts:documentation-research]
 tech_spec: TS-0002
-contracts: [rag/chunkers/transcript.py, rag/embedders/litellm.py, rag/stores/pgvector.py, yt_sync/models.py]
+contracts: [contracts/types.py, contracts/api-schema.yaml]
 ---
-# task-004: Implement IngestionService
+# task-004-ingestion-service: RAG Ingestion Service
 
 ## Scope
-CREATE: rag/services/__init__.py, rag/services/ingestion.py, rag/services/tests/__init__.py, rag/services/tests/test_ingestion.py
-MODIFY: none
-BOUNDARY: rag/chunkers/*, rag/embedders/*, rag/stores/*, yt_sync/models.py, rag/core/*
+CREATE:
+- rag/services/__init__.py
+- rag/services/ingestion.py
+- rag/services/tests/__init__.py
+- rag/services/tests/test_ingestion.py
+
+BOUNDARY:
+- rag/core/* (do not modify)
+- rag/stores/* (do not modify)
+- yt_sync/models.py (read-only)
 
 ## Requirements
-- Implement `IngestionService` class orchestrating chunking, embedding, storage
-- Constructor accepts `chunker`, `embedder`, `store` (dependency injection)
-- Implement `ingest_video(video: Video) -> int` returning chunk count
-- Build `Document` from `Video` with `owner_id` from `video.source.user.id`
-- Set `Document.visibility` to `PRIVATE` by default
-- Include video metadata in `Document.metadata`: `youtube_video_id`, `title`, `url`
-- Handle `ValueError` if `video.transcript_data` is None
-- Log ingestion progress and chunk count using Django logging
-- Create `Embedding` objects with correct `chunk_id`, `vector`, `model`, `dimensions`
-- Call `store.upsert_batch` to persist embeddings
+- Orchestrate chunker, embedder, and vector store
+- Implement ingest_video(Video) -> int (returns chunk count)
+- Build Document from Video metadata
+- Set ACL from video.source.user (tenant, visibility)
+- Use document ID format: video:{pk}
+- Extract transcript from video.transcript_text
+- Chunk transcript using TranscriptChunker
+- Embed chunks using configured embedder
+- Store chunks in VectorStore
+- Handle videos without transcripts gracefully
+- Support re-ingestion (clear existing chunks first)
 
 ## Checklist
-- [ ] `IngestionService` constructor with `chunker`, `embedder`, `store` parameters
-- [ ] `ingest_video(video: Video) -> int` implemented
-- [ ] `Document.id` follows convention `video:{video.pk}`
-- [ ] `Document.owner_id = str(video.source.user.id)`
-- [ ] `Document.visibility` set to `PRIVATE`
-- [ ] `Document.metadata` includes `youtube_video_id`, `title`, `url`
-- [ ] `Embedding` objects created with correct `chunk_id`, `vector`, `model`, `dimensions`
-- [ ] `store.upsert_batch` called to persist embeddings
-- [ ] `ValueError` raised if `video.transcript_data` is None with clear message
-- [ ] Ingestion progress logged (start, chunk count, completion)
-- [ ] Tests mock `chunker`, `embedder`, `store`
-- [ ] Test coverage >= 90%
+- [ ] IngestionService class created
+- [ ] ingest_video() method works end-to-end
+- [ ] Document built correctly from Video
+- [ ] ACL inherited from video.source.user
+- [ ] Document ID format: video:{pk}
+- [ ] Transcript chunking works
+- [ ] Embedding works
+- [ ] Vector storage works
+- [ ] Re-ingestion clears old chunks
+- [ ] Unit tests pass
+- [ ] Integration tests pass
+- [ ] Type hints complete
+- [ ] Docstrings written

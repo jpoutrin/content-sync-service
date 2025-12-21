@@ -1,280 +1,427 @@
-# RAG Transcript Ingestion & Search Architecture
+# Architecture: RAG Transcript Ingestion (TS-0002)
 
 ## Overview
 
-This architecture extends the existing `rag/` module to add transcript-specific ingestion and search capabilities. It builds on TS-0001's ACL foundation while introducing intelligent chunking, flexible embedding, and YouTube-aware search features.
+This architecture implements a RAG (Retrieval-Augmented Generation) pipeline for YouTube video transcript ingestion and semantic search. The system processes video transcripts, chunks them intelligently based on timestamp gaps, generates embeddings using LiteLLM, stores them in pgvector, and provides semantic search capabilities with ACL enforcement.
 
-## Component Architecture
+## Component Diagram
 
 ```mermaid
 graph TB
-    subgraph "Django Application Layer"
-        API[Search API Endpoint]
-        Admin[Django Admin Interface]
-        CLI_Search[CLI Search Command]
-        CLI_Ingest[CLI Ingest Command]
+    subgraph "Ingestion Flow"
+        Video[YouTube Video] --> Transcript[Video Transcript]
+        Transcript --> Chunker[TranscriptChunker]
+        Chunker --> Chunks[Transcript Chunks]
+        Chunks --> Embedder[LiteLLMEmbedder]
+        Embedder --> Embeddings[Vector Embeddings]
+        Embeddings --> PgVector[(pgvector Store)]
     end
 
-    subgraph "Service Layer"
-        IngestionService[IngestionService]
-        DefaultRetriever[DefaultRetriever]
-        SignalHandler[Auto-Ingestion Signal Handler]
+    subgraph "Search Flow"
+        Query[Search Query] --> QueryEmbedder[LiteLLMEmbedder]
+        QueryEmbedder --> QueryVector[Query Vector]
+        QueryVector --> Retriever[DefaultRetriever]
+        ACLContext[QueryACLContext] --> Retriever
+        Retriever --> PgVector
+        PgVector --> Results[Ranked Results]
+        Results --> Enriched[Enriched Results]
     end
 
-    subgraph "Core Components"
-        TranscriptChunker[TranscriptChunker]
-        LiteLLMEmbedder[LiteLLMEmbedder]
-        Config[RAGConfig]
+    subgraph "Orchestration"
+        IngestionService[IngestionService] -.orchestrates.-> Chunker
+        IngestionService -.orchestrates.-> Embedder
+        IngestionService -.orchestrates.-> PgVector
     end
 
-    subgraph "TS-0001 Foundation"
-        PgVectorStore[PgVectorStore]
-        ACLSystem[ACL Interfaces & Schemas]
-        Models[Transcript/Document Models]
+    subgraph "Interfaces"
+        API[REST API /search] --> Retriever
+        CLISearch[rag_search command] --> Retriever
+        CLIIngest[rag_ingest command] --> IngestionService
+        Signal[yt_sync signal] --> IngestionService
+        Admin[Django Admin] --> PgVector
     end
 
-    subgraph "External Services"
-        LiteLLM[LiteLLM Providers]
-        PostgreSQL[(PostgreSQL + pgvector)]
-        DjangoQ[Django-Q Task Queue]
-    end
-
-    API --> DefaultRetriever
-    CLI_Search --> DefaultRetriever
-    CLI_Ingest --> IngestionService
-    Admin --> DefaultRetriever
-    SignalHandler --> DjangoQ
-    DjangoQ --> IngestionService
-
-    IngestionService --> TranscriptChunker
-    IngestionService --> LiteLLMEmbedder
-    IngestionService --> PgVectorStore
-    IngestionService --> Config
-
-    DefaultRetriever --> LiteLLMEmbedder
-    DefaultRetriever --> PgVectorStore
-    DefaultRetriever --> Config
-
-    TranscriptChunker --> Models
-    LiteLLMEmbedder --> LiteLLM
-    PgVectorStore --> PostgreSQL
-    PgVectorStore --> ACLSystem
-
-    style IngestionService fill:#e1f5ff
-    style DefaultRetriever fill:#e1f5ff
-    style TranscriptChunker fill:#fff4e1
-    style LiteLLMEmbedder fill:#fff4e1
-    style Config fill:#fff4e1
+    style PgVector fill:#e1f5ff
+    style ACLContext fill:#ffe1e1
 ```
 
-## Data Flow Diagrams
+## Components
 
-### Ingestion Pipeline Flow
+### Core Components
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant CLI/Signal
-    participant IngestionService
-    participant TranscriptChunker
-    participant LiteLLMEmbedder
-    participant PgVectorStore
-    participant PostgreSQL
+#### TranscriptChunker (`rag/chunkers/transcript.py`)
+- **Purpose**: Intelligently chunk video transcripts based on timestamp gaps
+- **Algorithm**:
+  - Analyzes timestamp gaps between transcript segments
+  - Creates chunks when gaps exceed configurable threshold (default: 2 seconds)
+  - Preserves semantic continuity while respecting natural breaks
+- **Input**: Video transcript with timestamps
+- **Output**: List of text chunks with metadata (start_time, end_time)
+- **Configuration**: `RAG_CHUNKING_GAP_THRESHOLD`
 
-    User->>CLI/Signal: Trigger ingestion
-    CLI/Signal->>IngestionService: ingest_transcript(transcript_id, tenant_id)
+#### LiteLLMEmbedder (`rag/embedders/litellm.py`)
+- **Purpose**: Generate vector embeddings using LiteLLM library
+- **Models**:
+  - Local: `nomic-ai/nomic-embed-text-v1.5` (default, no API key required)
+  - OpenAI: `text-embedding-3-small` or `text-embedding-3-large`
+- **Features**:
+  - Batch processing support
+  - Automatic model selection based on configuration
+  - Caching layer for repeated queries
+- **Configuration**: `RAG_EMBEDDING_MODEL`, `RAG_EMBEDDING_DIMENSIONS`
 
-    IngestionService->>IngestionService: Fetch Transcript model
-    IngestionService->>TranscriptChunker: chunk_transcript(transcript)
-    TranscriptChunker->>TranscriptChunker: Parse JSON segments
-    TranscriptChunker->>TranscriptChunker: Apply gap-based chunking
-    TranscriptChunker-->>IngestionService: List[TranscriptChunk]
+#### RAG Configuration (`rag/config.py`)
+- **Purpose**: Centralized configuration management
+- **Settings**:
+  - `RAG_EMBEDDING_MODEL`: Model identifier for embeddings
+  - `RAG_EMBEDDING_DIMENSIONS`: Vector dimension (384 for nomic, 1536 for OpenAI)
+  - `RAG_CHUNKING_GAP_THRESHOLD`: Timestamp gap threshold in seconds
+  - `RAG_SEARCH_TOP_K`: Number of results to return
+  - `RAG_SEARCH_SIMILARITY_THRESHOLD`: Minimum similarity score
+- **Loading**: Settings loaded from Django configuration with defaults
 
-    loop For each chunk
-        IngestionService->>LiteLLMEmbedder: embed_text(chunk.text)
-        LiteLLMEmbedder->>LiteLLM: Generate embedding
-        LiteLLM-->>LiteLLMEmbedder: Vector embedding
-        LiteLLMEmbedder-->>IngestionService: Embedding vector
+### Service Layer
 
-        IngestionService->>PgVectorStore: store_chunk(chunk, embedding, tenant_id)
-        PgVectorStore->>PostgreSQL: INSERT with tenant_id
-        PostgreSQL-->>PgVectorStore: Confirmation
-    end
+#### IngestionService (`rag/services/ingestion.py`)
+- **Purpose**: Orchestrate the complete ingestion pipeline
+- **Workflow**:
+  1. Validate input video and transcript
+  2. Chunk transcript using TranscriptChunker
+  3. Generate embeddings for each chunk
+  4. Store chunks and embeddings in pgvector
+  5. Update video metadata with ingestion status
+- **Transaction Management**: Ensures atomic operations
+- **Error Handling**: Rollback on failure, logging for debugging
 
-    IngestionService-->>CLI/Signal: Success/Error status
+#### DefaultRetriever (`rag/retrievers/default.py`)
+- **Purpose**: Semantic search with ACL enforcement
+- **Workflow**:
+  1. Generate embedding for search query
+  2. Apply ACL filters from QueryACLContext (TS-0001)
+  3. Execute cosine similarity search in pgvector
+  4. Rank and filter results by threshold
+  5. Enrich results with video metadata
+- **ACL Integration**: Uses `QueryACLContext.to_queryset_filter()`
+- **Performance**: Optimized SQL queries with proper indexing
+
+### API Layer
+
+#### SearchView (`rag/api/views.py`)
+- **Purpose**: REST API endpoint for semantic search
+- **Endpoint**: `POST /api/rag/search/`
+- **Request Schema**:
+  ```json
+  {
+    "query": "search text",
+    "top_k": 10,
+    "similarity_threshold": 0.7
+  }
+  ```
+- **Response Schema**:
+  ```json
+  {
+    "results": [
+      {
+        "chunk_id": "uuid",
+        "text": "chunk content",
+        "similarity": 0.95,
+        "video_id": "uuid",
+        "start_time": 123.45,
+        "end_time": 234.56
+      }
+    ]
+  }
+  ```
+- **Authentication**: Required, uses Django authentication
+- **ACL**: Automatic ACL context from authenticated user
+
+### CLI Commands
+
+#### rag_search (`rag/management/commands/rag_search.py`)
+- **Purpose**: Command-line semantic search interface
+- **Usage**: `python manage.py rag_search "query text" --top-k 10`
+- **Features**:
+  - Interactive query mode
+  - JSON output format option
+  - ACL context from --user parameter
+
+#### rag_ingest (`rag/management/commands/rag_ingest.py`)
+- **Purpose**: Command-line ingestion interface
+- **Usage**: `python manage.py rag_ingest --video-id <uuid>`
+- **Features**:
+  - Batch ingestion support
+  - Force re-ingestion option
+  - Progress reporting
+
+### Integration Layer
+
+#### Auto-Ingestion Signal (`yt_sync/signals.py`)
+- **Purpose**: Automatic ingestion when transcripts are created/updated
+- **Trigger**: Django signal on `VideoTranscript.post_save`
+- **Behavior**:
+  - Checks if auto-ingestion is enabled
+  - Queues ingestion task using Django-Q
+  - Tracks ingestion status in video metadata
+- **Configuration**: `RAG_AUTO_INGEST_ENABLED`
+
+#### Admin Interface (`rag/admin.py`)
+- **Purpose**: Django admin integration for RAG management
+- **Features**:
+  - View ingested chunks and embeddings
+  - Trigger manual re-ingestion
+  - Monitor ingestion status
+  - Search and filter chunks
+
+## Data Flow
+
+### Ingestion Pipeline
+
+```
+1. Video Transcript (raw)
+   ├─ Fields: video_id, transcript_text, timestamps
+   └─ Source: YouTube API or manual upload
+
+2. Chunking Process
+   ├─ Input: Transcript with timestamps
+   ├─ Process: TranscriptChunker.chunk()
+   └─ Output: List[TranscriptChunk]
+       ├─ text: str
+       ├─ start_time: float
+       └─ end_time: float
+
+3. Embedding Generation
+   ├─ Input: List[TranscriptChunk]
+   ├─ Process: LiteLLMEmbedder.embed_batch()
+   └─ Output: List[Vector] (384 or 1536 dimensions)
+
+4. Storage
+   ├─ Table: rag_transcript_chunks
+   ├─ Columns:
+   │   ├─ id: UUID
+   │   ├─ video_id: FK to yt_sync_video
+   │   ├─ text: TEXT
+   │   ├─ start_time: FLOAT
+   │   ├─ end_time: FLOAT
+   │   ├─ embedding: VECTOR(384)
+   │   └─ created_at: TIMESTAMP
+   └─ Indexes:
+       ├─ video_id (B-tree)
+       └─ embedding (HNSW for cosine similarity)
 ```
 
-### Search Flow
+### Search Pipeline
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant API/CLI
-    participant DefaultRetriever
-    participant LiteLLMEmbedder
-    participant PgVectorStore
-    participant PostgreSQL
+```
+1. Search Query (text)
+   └─ Example: "explain dependency injection"
 
-    User->>API/CLI: Search query
-    API/CLI->>DefaultRetriever: search(query, tenant_id, filters)
+2. Query Embedding
+   ├─ Input: Query text
+   ├─ Process: LiteLLMEmbedder.embed()
+   └─ Output: Vector (384 or 1536 dimensions)
 
-    DefaultRetriever->>LiteLLMEmbedder: embed_text(query)
-    LiteLLMEmbedder->>LiteLLM: Generate query embedding
-    LiteLLM-->>LiteLLMEmbedder: Vector embedding
-    LiteLLMEmbedder-->>DefaultRetriever: Query embedding
+3. ACL Filter Construction
+   ├─ Input: QueryACLContext (from TS-0001)
+   ├─ Process: to_queryset_filter()
+   └─ Output: Django Q filter expression
 
-    DefaultRetriever->>PgVectorStore: similarity_search(embedding, tenant_id, filters)
-    PgVectorStore->>PostgreSQL: Vector similarity query with ACL
-    PostgreSQL-->>PgVectorStore: Matching chunks
-    PgVectorStore-->>DefaultRetriever: Filtered results
+4. Semantic Search
+   ├─ Input: Query vector + ACL filter
+   ├─ SQL:
+   │   SELECT *, 1 - (embedding <=> query_vector) AS similarity
+   │   FROM rag_transcript_chunks
+   │   WHERE video_id IN (ACL filtered video IDs)
+   │   ORDER BY similarity DESC
+   │   LIMIT top_k
+   └─ Output: Ranked chunks with similarity scores
 
-    DefaultRetriever->>DefaultRetriever: Enrich with YouTube URLs
-    DefaultRetriever->>DefaultRetriever: Apply reranking (if configured)
-    DefaultRetriever-->>API/CLI: SearchResult[]
-    API/CLI-->>User: Formatted results
+5. Result Enrichment
+   ├─ Input: Chunks with scores
+   ├─ Process: Join with video metadata
+   └─ Output: Enriched results
+       ├─ chunk_id, text, similarity
+       ├─ video_id, video_title, channel
+       └─ start_time, end_time, url_with_timestamp
 ```
 
-## Key Architectural Decisions
+## ACL Integration
 
-### 1. Intelligent Timestamp-Based Chunking
+### Integration with TS-0001
 
-**Decision**: Use transcript segment timestamps and gap detection for chunking instead of fixed character/token limits.
+The RAG system integrates seamlessly with the ACL management system from TS-0001:
 
-**Rationale**:
-- Preserves semantic boundaries (natural speech pauses)
-- Maintains temporal coherence for better context
-- Enables accurate timestamp-to-video linking
-- Avoids mid-sentence splits that harm search quality
+1. **ACL Context**: Uses `QueryACLContext` to determine user permissions
+2. **Filter Application**: Applies ACL filters at SQL level for performance
+3. **Enforcement Point**: DefaultRetriever enforces ACL before search execution
+4. **Scope**: All search operations (API, CLI, Admin) respect ACL rules
 
-**Implementation**: `TranscriptChunker` analyzes segment gaps (>2s default) to identify natural break points.
+### ACL Enforcement Flow
 
-### 2. LiteLLM Provider Abstraction
+```python
+# In DefaultRetriever.search()
+def search(self, query: str, user: User, top_k: int = 10):
+    # 1. Create ACL context
+    acl_context = QueryACLContext.from_user(user)
 
-**Decision**: Use LiteLLM as an abstraction layer for embedding providers.
+    # 2. Get allowed video IDs
+    video_filter = acl_context.to_queryset_filter()
+    allowed_video_ids = Video.objects.filter(video_filter).values_list('id', flat=True)
 
-**Rationale**:
-- Single interface supports multiple providers (OpenAI, local models, etc.)
-- Easy switching between development (local) and production (OpenAI)
-- Future-proof against provider changes
-- Consistent retry/error handling across providers
+    # 3. Execute search with ACL filter
+    results = TranscriptChunk.objects.filter(
+        video_id__in=allowed_video_ids
+    ).annotate(
+        similarity=CosineDistance('embedding', query_vector)
+    ).filter(
+        similarity__gte=threshold
+    ).order_by('-similarity')[:top_k]
 
-**Implementation**: `LiteLLMEmbedder` wraps LiteLLM client with configuration-driven provider selection.
+    return results
+```
 
-### 3. Dependency Injection Pattern
+### Security Guarantees
 
-**Decision**: Services accept dependencies via constructor injection (embedder, vector_store, config).
+- **SQL-Level Enforcement**: ACL filters applied in database query, not application layer
+- **No Information Leakage**: Users cannot infer existence of unauthorized content
+- **Performance**: ACL filters use indexed queries, minimal overhead
+- **Consistency**: Same ACL logic across all search interfaces
 
-**Rationale**:
-- Enables easy testing with mocks
-- Decouples components for independent development
-- Supports multiple configurations (dev vs. prod)
-- Follows Django best practices
+## Configuration
 
-**Implementation**: `IngestionService` and `DefaultRetriever` receive dependencies in `__init__`.
+### Django Settings (`config/settings.py`)
 
-### 4. YouTube-Aware Search Results
+```python
+# RAG Configuration
+RAG_EMBEDDING_MODEL = env('RAG_EMBEDDING_MODEL', default='nomic-ai/nomic-embed-text-v1.5')
+RAG_EMBEDDING_DIMENSIONS = env.int('RAG_EMBEDDING_DIMENSIONS', default=384)
+RAG_CHUNKING_GAP_THRESHOLD = env.float('RAG_CHUNKING_GAP_THRESHOLD', default=2.0)
+RAG_SEARCH_TOP_K = env.int('RAG_SEARCH_TOP_K', default=10)
+RAG_SEARCH_SIMILARITY_THRESHOLD = env.float('RAG_SEARCH_SIMILARITY_THRESHOLD', default=0.7)
+RAG_AUTO_INGEST_ENABLED = env.bool('RAG_AUTO_INGEST_ENABLED', default=True)
 
-**Decision**: `DefaultRetriever` enriches results with YouTube timestamp URLs.
+# OpenAI API Key (optional, for OpenAI embeddings)
+OPENAI_API_KEY = env('OPENAI_API_KEY', default=None)
+```
 
-**Rationale**:
-- Provides direct deep-linking to relevant video moments
-- Enhances user experience (click to watch at exact timestamp)
-- Leverages existing transcript metadata (video_id, start_time)
-- No additional API calls needed
+### Environment Variables
 
-**Implementation**: Generate `https://youtube.com/watch?v={video_id}&t={start_time}` URLs.
+```bash
+# Local embeddings (default, no API key needed)
+RAG_EMBEDDING_MODEL=nomic-ai/nomic-embed-text-v1.5
+RAG_EMBEDDING_DIMENSIONS=384
 
-### 5. Async Auto-Ingestion via Django-Q
+# OpenAI embeddings (requires API key)
+RAG_EMBEDDING_MODEL=text-embedding-3-small
+RAG_EMBEDDING_DIMENSIONS=1536
+OPENAI_API_KEY=sk-...
 
-**Decision**: Use Django-Q tasks for automatic ingestion on transcript save.
+# Chunking configuration
+RAG_CHUNKING_GAP_THRESHOLD=2.0  # seconds
 
-**Rationale**:
-- Avoids blocking HTTP responses during ingestion
-- Handles embedding API timeouts gracefully
-- Enables retry logic for failed ingestions
-- Scales with concurrent transcript uploads
+# Search configuration
+RAG_SEARCH_TOP_K=10
+RAG_SEARCH_SIMILARITY_THRESHOLD=0.7
 
-**Implementation**: Signal handler enqueues `ingest_transcript_task` after save.
+# Auto-ingestion
+RAG_AUTO_INGEST_ENABLED=true
+```
 
-### 6. Multi-Tenant Security via ACL System
+## Database Schema
 
-**Decision**: All operations strictly enforce tenant_id filtering via TS-0001's ACL foundation.
+### rag_transcript_chunks
 
-**Rationale**:
-- Prevents cross-tenant data leakage
-- Reuses battle-tested ACL logic from TS-0001
-- Consistent security model across features
-- Database-level isolation (tenant_id in queries)
+```sql
+CREATE TABLE rag_transcript_chunks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    video_id UUID NOT NULL REFERENCES yt_sync_video(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    start_time DOUBLE PRECISION NOT NULL,
+    end_time DOUBLE PRECISION NOT NULL,
+    embedding VECTOR(384) NOT NULL,  -- or 1536 for OpenAI
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
-**Implementation**: Every `PgVectorStore` operation includes `tenant_id` WHERE clause.
+-- Indexes
+CREATE INDEX idx_transcript_chunks_video_id ON rag_transcript_chunks(video_id);
+CREATE INDEX idx_transcript_chunks_embedding ON rag_transcript_chunks
+    USING hnsw (embedding vector_cosine_ops);
+```
 
-## Component Responsibilities
+## Performance Considerations
 
-### TranscriptChunker
-- Parse transcript JSON segments
-- Identify natural break points via timestamp gaps
-- Generate chunks with metadata (start_time, end_time, video_id)
-- Enforce max chunk size constraints
+### Indexing Strategy
+- **B-tree index** on `video_id` for ACL filtering
+- **HNSW index** on `embedding` for fast cosine similarity search
+- Combined indexes ensure efficient ACL + semantic search queries
 
-### LiteLLMEmbedder
-- Abstract embedding provider calls
-- Handle authentication and configuration
-- Manage retry logic for API failures
-- Return consistent vector format
+### Batch Processing
+- Embeddings generated in batches (configurable batch size)
+- Database bulk inserts for chunks and embeddings
+- Transaction management to ensure consistency
 
-### IngestionService
-- Orchestrate end-to-end ingestion pipeline
-- Coordinate chunker, embedder, and vector store
-- Handle transaction boundaries
-- Report ingestion metrics/errors
+### Caching
+- Query embeddings cached for repeated searches
+- Model loading cached (singleton pattern)
+- ACL context cached per request
 
-### DefaultRetriever
-- Convert text queries to embeddings
-- Execute similarity searches with ACL filtering
-- Enrich results with YouTube metadata
-- Apply optional reranking
+### Scalability
+- Stateless design allows horizontal scaling
+- Database connection pooling
+- Async task queue for ingestion (Django-Q)
 
-### RAGConfig
-- Centralize configuration (providers, thresholds, etc.)
-- Environment-based settings (dev vs. prod)
-- Validation of required parameters
+## Error Handling
 
-## Extension Points
+### Ingestion Errors
+- **Validation Errors**: Return clear error messages, no partial ingestion
+- **Embedding Errors**: Retry with exponential backoff, log failures
+- **Database Errors**: Rollback transaction, preserve original state
 
-1. **Custom Chunkers**: Implement `ChunkerInterface` for alternative strategies
-2. **Embedding Providers**: Add new providers via LiteLLM configuration
-3. **Retrieval Strategies**: Implement `RetrieverInterface` for hybrid search, reranking, etc.
-4. **Ingestion Hooks**: Extend signal handlers for custom pre/post-processing
-5. **Admin Customization**: Override Django admin classes for tenant-specific views
+### Search Errors
+- **ACL Errors**: Return empty results, log security events
+- **Embedding Errors**: Return graceful error message
+- **Database Errors**: Return 500 with generic message, log details
 
-## Security Considerations
+## Testing Strategy
 
-1. **Tenant Isolation**: All queries filtered by `tenant_id`
-2. **API Authentication**: Search endpoints require authenticated users
-3. **Input Validation**: Sanitize queries to prevent injection attacks
-4. **Rate Limiting**: Protect embedding APIs from abuse
-5. **Audit Logging**: Track ingestion and search operations per tenant
+### Unit Tests
+- TranscriptChunker: Verify chunking algorithm with various timestamp patterns
+- LiteLLMEmbedder: Test embedding generation and caching
+- IngestionService: Mock dependencies, test orchestration logic
+- DefaultRetriever: Test search logic with mock ACL context
 
-## Performance Characteristics
+### Integration Tests
+- End-to-end ingestion pipeline with real database
+- Search with ACL enforcement using test users
+- API endpoints with authentication and authorization
+- CLI commands with various options
 
-### Ingestion
-- **Chunking**: O(n) where n = number of segments
-- **Embedding**: O(c * E) where c = chunks, E = embedding API latency
-- **Storage**: O(c) database inserts
+### Security Tests (task-011)
+- ACL enforcement: Verify users cannot access unauthorized content
+- Information leakage: Ensure no hints about unauthorized content
+- SQL injection: Test search query sanitization
+- Performance under load: ACL queries remain fast
 
-### Search
-- **Embedding**: O(E) single query embedding
-- **Vector Search**: O(log n) with pgvector IVFFLAT index
-- **Enrichment**: O(k) where k = result count (typically ≤ 10)
+## Deployment
 
-## Dependencies on TS-0001
+### Dependencies
+- `litellm>=1.0.0` - Embedding generation
+- `pgvector>=0.2.0` - PostgreSQL vector extension
+- `django-q>=1.3.0` - Task queue (already in project)
 
-This architecture relies on the following TS-0001 components:
+### Database Setup
+1. Enable pgvector extension: `CREATE EXTENSION IF NOT EXISTS vector;`
+2. Run migrations: `python manage.py migrate rag`
+3. Create HNSW index: Included in migration
 
-1. **ACL Interfaces**: `ACLContext`, `ACLPolicy` for tenant filtering
-2. **ACL Schemas**: `TenantContext` for security contexts
-3. **PgVectorStore**: Vector storage with ACL enforcement
-4. **Models**: `Transcript`, `Document` Django models
-5. **Database Schema**: pgvector extension, tenant_id columns
+### Initial Configuration
+1. Set environment variables in `.env`
+2. Choose embedding model (local vs OpenAI)
+3. Configure chunking and search thresholds
+4. Enable/disable auto-ingestion
 
-All TS-0002 components integrate seamlessly with this foundation.
+### Monitoring
+- Track ingestion success/failure rates
+- Monitor search latency and ACL query performance
+- Alert on embedding API failures (if using OpenAI)
+- Dashboard for chunk count and storage usage

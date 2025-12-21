@@ -1,39 +1,44 @@
 ---
-id: task-003
-component: config
+id: task-003-config
+component: Settings
 wave: 1
 deps: []
+blocks: [task-004, task-005, task-009]
 agent: python-experts:django-expert
+skills: [python-experts:python-style, python-experts:django-dev]
 tech_spec: TS-0002
-contracts: []
+contracts: [contracts/types.py, contracts/api-schema.yaml]
 ---
-# task-003: Add RAG Configuration Settings
+# task-003-config: RAG Configuration Settings
 
 ## Scope
-CREATE: none
-MODIFY: config/settings.py
-BOUNDARY: rag/*, yt_sync/*, manage.py
+MODIFY:
+- config/settings.py
+
+BOUNDARY:
+- rag/* (do not create/modify)
+- yt_sync/* (do not modify)
 
 ## Requirements
-- Add `RAG_EMBEDDING_PROVIDER` setting (default: 'local')
-- Add `RAG_EMBEDDING_MODEL` setting (default: 'sentence-transformers/all-MiniLM-L6-v2')
-- Add `RAG_AUTO_INGEST` boolean (default: True)
-- Add `RAG_CHUNK_GAP_THRESHOLD` float (default: 2.0)
-- Add `RAG_CHUNK_MAX_CHARS` int (default: 1000)
-- Add `RAG_CHUNK_MIN_CHARS` int (default: 100)
-- Add `RAG_EMBEDDING_BATCH_SIZE` int (default: 50)
-- Add `OPENAI_API_KEY` setting (from environment)
-- Group all settings with comment header `# RAG Configuration`
-- Use `environ.Env` with appropriate type casting for each setting
+- Add RAG_EMBEDDING_PROVIDER setting (local or openai)
+- Add RAG_EMBEDDING_MODEL setting (provider-specific model name)
+- Add RAG_AUTO_INGEST setting (boolean, default False)
+- Add RAG_CHUNK_GAP_THRESHOLD setting (float, default 2.0)
+- Add RAG_CHUNK_MAX_CHARS setting (int, default 1000)
+- Add RAG_CHUNK_MIN_CHARS setting (int, default 100)
+- Add RAG_EMBEDDING_BATCH_SIZE setting (int, default 32)
+- Use django-environ for environment variable loading
+- Include sensible defaults
+- Document each setting with comments
 
 ## Checklist
-- [ ] `RAG_EMBEDDING_PROVIDER` setting added with default 'local'
-- [ ] `RAG_EMBEDDING_MODEL` setting added with default 'sentence-transformers/all-MiniLM-L6-v2'
-- [ ] `RAG_AUTO_INGEST` boolean setting added with default True
-- [ ] `RAG_CHUNK_GAP_THRESHOLD` float setting added with default 2.0
-- [ ] `RAG_CHUNK_MAX_CHARS` int setting added with default 1000
-- [ ] `RAG_CHUNK_MIN_CHARS` int setting added with default 100
-- [ ] `RAG_EMBEDDING_BATCH_SIZE` int setting added with default 50
-- [ ] `OPENAI_API_KEY` setting added (reads from environment)
-- [ ] All settings grouped under `# RAG Configuration` comment
-- [ ] Django server starts without errors (`python manage.py runserver`)
+- [ ] RAG_EMBEDDING_PROVIDER setting added
+- [ ] RAG_EMBEDDING_MODEL setting added
+- [ ] RAG_AUTO_INGEST setting added
+- [ ] RAG_CHUNK_GAP_THRESHOLD setting added
+- [ ] RAG_CHUNK_MAX_CHARS setting added
+- [ ] RAG_CHUNK_MIN_CHARS setting added
+- [ ] RAG_EMBEDDING_BATCH_SIZE setting added
+- [ ] All settings use django-environ
+- [ ] Defaults documented
+- [ ] Django app starts correctly with new settings
