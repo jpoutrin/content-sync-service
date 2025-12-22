@@ -50,7 +50,7 @@
     {
       "number": 5,
       "tasks": [
-        { "id": "task-011-acl-security-tests", "agent": "python-experts:python-testing-expert" }
+        { "id": "task-011", "agent": "python-experts:python-testing-expert" }
       ],
       "validation": "import pytest; print('Wave 5 OK')"
     }
