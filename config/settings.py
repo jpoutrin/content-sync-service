@@ -162,3 +162,59 @@ REST_FRAMEWORK = {
 
 # CORS
 CORS_ALLOW_ALL_ORIGINS = True  # For dev only
+
+# =============================================================================
+# RAG (Retrieval-Augmented Generation) Configuration
+# =============================================================================
+
+# Embedding Provider Configuration
+RAG_EMBEDDING_PROVIDER = env('RAG_EMBEDDING_PROVIDER', default='local')
+"""
+Embedding provider for transcript vectorization.
+Options: 'local' (sentence-transformers), 'openai', 'cohere', etc.
+"""
+
+RAG_EMBEDDING_MODEL = env(
+    'RAG_EMBEDDING_MODEL',
+    default='sentence-transformers/all-MiniLM-L6-v2'
+)
+"""
+Model identifier for embeddings.
+Examples:
+- 'sentence-transformers/all-MiniLM-L6-v2' (local, 384 dims)
+- 'text-embedding-3-small' (OpenAI, 1536 dims)
+- 'embed-english-v3.0' (Cohere)
+"""
+
+# Ingestion Settings
+RAG_AUTO_INGEST = env.bool('RAG_AUTO_INGEST', default=True)
+"""
+Automatically trigger transcript ingestion when new videos are synced.
+Set to False to manually trigger ingestion via management command.
+"""
+
+# Chunking Configuration
+RAG_CHUNK_GAP_THRESHOLD = env.float('RAG_CHUNK_GAP_THRESHOLD', default=2.0)
+"""
+Maximum gap in seconds between transcript segments to merge into one chunk.
+Segments separated by longer pauses will be split into separate chunks.
+"""
+
+RAG_CHUNK_MAX_CHARS = env.int('RAG_CHUNK_MAX_CHARS', default=1000)
+"""
+Maximum characters per chunk.
+Larger chunks provide more context but may dilute semantic relevance.
+"""
+
+RAG_CHUNK_MIN_CHARS = env.int('RAG_CHUNK_MIN_CHARS', default=100)
+"""
+Minimum characters per chunk to avoid tiny fragments.
+Smaller values allow more granular search but increase storage costs.
+"""
+
+# Embedding Batch Processing
+RAG_EMBEDDING_BATCH_SIZE = env.int('RAG_EMBEDDING_BATCH_SIZE', default=50)
+"""
+Number of text chunks to embed in a single API call.
+Higher values improve throughput but may hit API rate limits.
+"""
