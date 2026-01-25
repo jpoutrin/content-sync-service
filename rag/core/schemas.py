@@ -66,7 +66,7 @@ class Chunk(BaseModel):
             "shared_with_groups": document.shared_with_groups,
             "tenant_id": document.tenant_id,
         }
-        return cls(**chunk_fields, **acl_fields)
+        return cls(**chunk_fields, **acl_fields)  # type: ignore[arg-type]
 
 
 class Embedding(BaseModel):

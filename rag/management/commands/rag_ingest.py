@@ -73,9 +73,9 @@ class Command(BaseCommand):
         """Execute the ingestion command."""
         video_id = options.get("video_id")
         source = options.get("source")
-        ingest_all = options.get("all")
-        reingest = options.get("reingest")
-        dry_run = options.get("dry_run")
+        ingest_all = bool(options.get("all"))
+        reingest = bool(options.get("reingest"))
+        dry_run = bool(options.get("dry_run"))
 
         # Validate arguments
         if not any([video_id, source, ingest_all]):
@@ -294,7 +294,8 @@ class Command(BaseCommand):
                         f"SELECT COUNT(*) FROM {vector_store.table_name} WHERE document_id = %s",
                         (document_id,),
                     )
-                    existing_count = cur.fetchone()[0]
+                    result = cur.fetchone()
+                    existing_count = result[0] if result else 0
 
             if existing_count > 0:
                 self.stdout.write(

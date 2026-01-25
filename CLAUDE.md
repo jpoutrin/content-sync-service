@@ -40,11 +40,73 @@ python manage.py test
 ./scripts/start-services.sh
 ```
 
+## Claude Skills
+
+### Supabase Management
+Use the `/supabase` skill for all Supabase operations:
+
+```bash
+# Local development
+/supabase start              # Start local Supabase stack
+/supabase stop               # Stop local stack
+/supabase status             # Check running services
+
+# Database operations
+/supabase db reset           # Reset local database
+/supabase db pull            # Pull schema from remote
+/supabase db push            # Push migrations to remote
+
+# Migrations
+/supabase migration new <name>    # Create new migration
+/supabase migration up            # Apply pending migrations
+
+# Type generation
+/supabase gen types          # Generate TypeScript types
+
+# Edge Functions
+/supabase functions new      # Create new function
+/supabase functions serve    # Serve functions locally
+/supabase functions deploy   # Deploy to remote
+```
+
+See `~/.claude/skills/supabase/skill.md` for complete command reference.
+
 ## Coding Standards
 - Follow PEP 8 style guide
 - Use type hints for all function signatures
 - Write docstrings for public functions and classes
 - Keep functions focused and small
+
+## Code Quality Checks
+
+Use the Makefile for systematic code quality checks:
+
+```bash
+# Type checking
+make typecheck          # Run mypy on all modules
+make typecheck-rag      # Run mypy on rag module only
+make typecheck-yt-sync  # Run mypy on yt_sync module only
+
+# Testing
+make test               # Run all tests
+make test-rag           # Run RAG tests only
+make test-yt-sync       # Run yt_sync tests only
+
+# Linting and formatting
+make lint               # Run ruff linting
+make format             # Format code with ruff
+
+# Run all checks
+make check              # Run typecheck + lint + test
+
+# Clean cache files
+make clean              # Remove __pycache__, .mypy_cache, etc.
+```
+
+**Type Checking Notes:**
+- Mypy is configured in `pyproject.toml` with Django plugins
+- Run type checks before committing code
+- Use `# type: ignore[error-code]` for intentional violations (e.g., testing invalid inputs)
 
 ## Parallel Development
 

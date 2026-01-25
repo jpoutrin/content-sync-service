@@ -129,7 +129,7 @@ AUTH_USER_MODEL = 'yt_sync.User'
 # Django Q Configuration (using ORM backend - no Redis required)
 Q_CLUSTER = {
     'name': 'DjangORM',
-    'workers': 4,
+    'workers': env.int('DJANGO_Q_WORKERS', default=4),
     'recycle': 500,
     'timeout': 60,
     'compress': True,

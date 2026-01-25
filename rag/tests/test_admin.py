@@ -90,7 +90,7 @@ class TestVideoAdmin:
         request = HttpRequest()
         request.user = admin_user
         request.META = {}
-        request._messages = Mock()
+        request._messages = Mock()  # type: ignore[attr-defined]
         return request
 
     def test_admin_registration(self):

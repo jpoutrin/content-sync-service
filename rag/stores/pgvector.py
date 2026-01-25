@@ -298,9 +298,15 @@ class PgVectorStore(VectorStoreInterface):
                 "Use QueryACLContext.system_context() for system operations."
             )
 
-        # Build SQL query
-        sql_parts = [f"SELECT * FROM {self.table_name}"]
+        # Build SQL query with similarity score in SELECT
+        vector_json = json.dumps(query_vector)
         params = []
+
+        # Start with SELECT including similarity calculation
+        sql_parts = [
+            f"SELECT *, (1 - (embedding <=> %s::vector)) as similarity FROM {self.table_name}"
+        ]
+        params.append(vector_json)
 
         # Apply ACL filtering unless bypassed
         if not acl_context.bypass_acl:
@@ -317,97 +323,50 @@ class PgVectorStore(VectorStoreInterface):
             params.extend(acl_params)
 
         # Add vector similarity ordering
-        # Convert $N placeholders to %s for psycopg2
-        params.append(json.dumps(query_vector))
         sql_parts.append("ORDER BY embedding <=> %s::vector")
+        params.append(vector_json)
+
         sql_parts.append("LIMIT %s")
         params.append(top_k)
 
-        # Build final SQL (convert $N to %s placeholders)
+        # Build final SQL
         sql = " ".join(sql_parts)
-        # Replace $N with %s for psycopg2 compatibility
+
+        # Replace $N with %s for psycopg2 compatibility (for ACL params only)
         if not acl_context.bypass_acl:
-            # We need to replace $1, $2, etc. with %s
-            for i in range(len(acl_params), 0, -1):
+            acl_params_count = len(acl_spec.to_sql_conditions()[1])
+            for i in range(acl_params_count, 0, -1):
                 sql = sql.replace(f"${i}", "%s", 1)
 
+        # Execute query
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
                 rows = cur.fetchall()
 
         # Convert rows to Chunk objects with scores
+        # Column mapping (0-indexed):
+        # 0:id, 1:chunk_id, 2:document_id, 3:content, 4:embedding, 5:metadata,
+        # 6:owner_id, 7:visibility, 8:shared_with_users, 9:shared_with_groups,
+        # 10:tenant_id, 11:created_at, 12:updated_at, 13:chunk_index,
+        # 14:start_char, 15:end_char, 16:similarity
         results = []
         for row in rows:
             chunk = Chunk(
-                id=row[0],  # chunk_id
-                document_id=row[1],
-                content=row[2],
-                index=row[4],  # chunk_index
-                start_char=row[5],
-                end_char=row[6],
-                metadata=row[7] if row[7] else {},
-                owner_id=row[8],
-                visibility=Visibility(row[9]),
-                shared_with_users=row[10] if row[10] else [],
-                shared_with_groups=row[11] if row[11] else [],
-                tenant_id=row[12]
+                id=row[1],  # chunk_id
+                document_id=row[2],
+                content=row[3],
+                index=row[13],  # chunk_index
+                start_char=row[14],
+                end_char=row[15],
+                metadata=row[5] if row[5] else {},
+                owner_id=row[6],
+                visibility=Visibility(row[7]),
+                shared_with_users=row[8] if row[8] else [],
+                shared_with_groups=row[9] if row[9] else [],
+                tenant_id=row[10]
             )
-            # Calculate similarity score from cosine distance
-            # Cosine distance is 1 - cosine_similarity, so similarity = 1 - distance
-            # We'll need to re-query with distance calculation
-            score = 0.0  # Placeholder - will be calculated in separate query
-            results.append((chunk, score))
-
-        # Re-run query to get distance scores
-        # This is necessary because we need the actual distance values
-        sql_with_distance = " ".join(sql_parts[:-1])  # Remove LIMIT
-        sql_with_distance = sql_with_distance.replace(
-            f"SELECT * FROM {self.table_name}",
-            f"SELECT *, (1 - (embedding <=> %s::vector)) as similarity FROM {self.table_name}"
-        )
-        # Insert the vector parameter at the right position
-        params_with_distance = []
-        vector_json = json.dumps(query_vector)
-
-        if not acl_context.bypass_acl:
-            params_with_distance.extend(acl_params)
-            params_with_distance.append(vector_json)
-        else:
-            params_with_distance.append(vector_json)
-
-        sql_with_distance += " ORDER BY embedding <=> %s::vector LIMIT %s"
-        params_with_distance.append(vector_json)
-        params_with_distance.append(top_k)
-
-        # Replace $N placeholders
-        if not acl_context.bypass_acl:
-            for i in range(len(acl_params), 0, -1):
-                sql_with_distance = sql_with_distance.replace(f"${i}", "%s", 1)
-
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql_with_distance, params_with_distance)
-                rows = cur.fetchall()
-
-        # Convert rows to Chunk objects with actual scores
-        results = []
-        for row in rows:
-            chunk = Chunk(
-                id=row[0],  # chunk_id
-                document_id=row[1],
-                content=row[2],
-                index=row[4],  # chunk_index
-                start_char=row[5],
-                end_char=row[6],
-                metadata=row[7] if row[7] else {},
-                owner_id=row[8],
-                visibility=Visibility(row[9]),
-                shared_with_users=row[10] if row[10] else [],
-                shared_with_groups=row[11] if row[11] else [],
-                tenant_id=row[12]
-            )
-            similarity = row[-1]  # Last column is similarity score
+            similarity = row[16]  # similarity column
             results.append((chunk, float(similarity)))
 
         return results
@@ -506,8 +465,8 @@ class PgVectorStore(VectorStoreInterface):
             raise ValueError("document_id cannot be empty")
 
         # Build UPDATE statement with only non-None parameters
-        update_fields = []
-        params = []
+        update_fields: list[str] = []
+        params: list[str | list[str]] = []
 
         if visibility is not None:
             update_fields.append("visibility = %s")

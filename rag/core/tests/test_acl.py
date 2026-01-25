@@ -61,7 +61,7 @@ class TestQueryACLContext:
 
         # Should fail without principal_id
         with pytest.raises(ValidationError) as exc_info:
-            QueryACLContext()
+            QueryACLContext()  # type: ignore[call-arg]
 
         error = exc_info.value
         assert "principal_id" in str(error)
@@ -122,7 +122,7 @@ class TestACLFilterSpec:
 
         # Should fail without required fields
         with pytest.raises(ValidationError):
-            ACLFilterSpec()
+            ACLFilterSpec()  # type: ignore[call-arg]
 
     def test_acl_filter_spec_defaults(self):
         """Test default values for optional fields."""
