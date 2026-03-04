@@ -147,17 +147,16 @@ class TestVideoAdmin:
         queryset = Video.objects.filter(pk=video_with_transcript.pk)
 
         # Execute action
-        with patch("yt_sync.admin.messages") as mock_messages:
-            video_admin.ingest_selected_videos(mock_request, queryset)
+        video_admin.ingest_selected_videos(mock_request, queryset)
 
-            # Verify success message
-            mock_messages.SUCCESS = 25  # Django messages.SUCCESS constant
-            success_calls = [
-                call
-                for call in mock_messages.method_calls
-                if "Successfully ingested" in str(call)
-            ]
-            assert len(success_calls) > 0
+        # Verify success message was added to request
+        assert mock_request._messages.add.called
+        success_calls = [
+            call
+            for call in mock_request._messages.add.call_args_list
+            if "Successfully ingested" in str(call)
+        ]
+        assert len(success_calls) > 0
 
         # Verify service was called
         mock_service_instance.ingest_video.assert_called_once_with(
@@ -170,17 +169,16 @@ class TestVideoAdmin:
         """Test ingestion action with no transcripts."""
         queryset = Video.objects.filter(pk=video_without_transcript.pk)
 
-        with patch("yt_sync.admin.messages") as mock_messages:
-            video_admin.ingest_selected_videos(mock_request, queryset)
+        video_admin.ingest_selected_videos(mock_request, queryset)
 
-            # Verify warning message was shown
-            mock_messages.WARNING = 30  # Django messages.WARNING constant
-            warning_calls = [
-                call
-                for call in mock_messages.method_calls
-                if "No videos with transcript data" in str(call)
-            ]
-            assert len(warning_calls) > 0
+        # Verify warning message was shown
+        assert mock_request._messages.add.called
+        warning_calls = [
+            call
+            for call in mock_request._messages.add.call_args_list
+            if "No videos with transcript data" in str(call)
+        ]
+        assert len(warning_calls) > 0
 
     @patch("yt_sync.admin.IngestionService")
     def test_ingest_action_partial_failure(
@@ -213,29 +211,24 @@ class TestVideoAdmin:
 
         queryset = Video.objects.filter(pk__in=[video_with_transcript.pk, video2.pk])
 
-        with patch("yt_sync.admin.messages") as mock_messages:
-            video_admin.ingest_selected_videos(mock_request, queryset)
+        video_admin.ingest_selected_videos(mock_request, queryset)
 
-            # Should have both success and error messages
-            mock_messages.SUCCESS = 25
-            mock_messages.ERROR = 40
-            mock_messages.WARNING = 30
+        # Should have both success and error messages
+        assert mock_request._messages.add.called
+        success_calls = [
+            call
+            for call in mock_request._messages.add.call_args_list
+            if "Successfully ingested 1 video" in str(call)
+        ]
+        assert len(success_calls) > 0
 
-            # Check for success message
-            success_calls = [
-                call
-                for call in mock_messages.method_calls
-                if "Successfully ingested 1 video" in str(call)
-            ]
-            assert len(success_calls) > 0
-
-            # Check for failure message
-            error_calls = [
-                call
-                for call in mock_messages.method_calls
-                if "Failed to ingest" in str(call)
-            ]
-            assert len(error_calls) > 0
+        # Check for failure message
+        error_calls = [
+            call
+            for call in mock_request._messages.add.call_args_list
+            if "Failed to ingest" in str(call)
+        ]
+        assert len(error_calls) > 0
 
     @patch("yt_sync.admin.DefaultRetriever")
     @patch("yt_sync.admin.PgVectorStore")
