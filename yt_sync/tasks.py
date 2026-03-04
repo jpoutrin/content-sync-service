@@ -236,3 +236,41 @@ def save_results_task(summary_result, video_id):
             video.save()
         except:
             pass
+
+
+def reprocess_llm_task(video_id):
+    """
+    Reprocesses only the LLM/AI analysis step for a video that already has a transcript.
+    Skips transcript fetching — reads transcript_text directly from the DB.
+    
+    This allows efficient reprocessing of LLM analysis without re-fetching from YouTube.
+    """
+    try:
+        video = Video.objects.get(id=video_id)
+    except Video.DoesNotExist:
+        logger.error(f"Video {video_id} not found")
+        return
+
+    if not video.transcript_text:
+        logger.warning(f"No transcript available for video {video_id}, skipping LLM reprocess")
+        return
+
+    logger.info(f"Starting LLM reprocessing for video: {video.title}")
+
+    # Reset AI analysis status
+    video.ai_analysis_status = Video.ProcessingStatus.PENDING
+    video.save()
+
+    # Create transcript result dict from stored transcript_text
+    transcript_result = {
+        'video_id': str(video_id),
+        'transcript_text': video.transcript_text
+    }
+
+    # Run LLM analysis
+    summary_result = generate_summary_task(transcript_result)
+    if summary_result:
+        save_results_task(summary_result, video_id)
+        logger.info(f"LLM reprocess complete for video {video_id}")
+    else:
+        logger.error(f"LLM reprocess failed for video {video_id}")

@@ -7,8 +7,8 @@ logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self):
-        self.api_key = settings.ANTHROPIC_API_KEY
-        self.model = "claude-3-haiku-20240307"
+        self.api_key = settings.OPENROUTER_API_KEY
+        self.model = "openrouter/anthropic/claude-haiku-4.5"
 
     def generate_summary(self, transcript_text):
         """
