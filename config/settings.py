@@ -147,7 +147,8 @@ SUPABASE_JWT_SECRET = env('SUPABASE_JWT_SECRET', default='')
 
 # External APIs
 YOUTUBE_API_KEY = env('YOUTUBE_API_KEY', default='')
-ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+# ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+OPENROUTER_API_KEY = env('OPENROUTER_API_KEY', default='')
 
 # REST Framework
 REST_FRAMEWORK = {
