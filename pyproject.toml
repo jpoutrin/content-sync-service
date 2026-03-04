@@ -18,6 +18,7 @@ dependencies = [
     "isodate>=0.6.1",
     "PyJWT>=2.8.0",
     "pgvector>=0.3.0",
+    "sentence-transformers>=2.2.0",
 ]
 
 [tool.pytest.ini_options]
@@ -30,6 +31,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
 ]
+norecursedirs = ["parallel", ".git", "node_modules", "*.egg-info"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -46,6 +48,7 @@ exclude = [
     "migrations/",
     ".venv/",
     "venv/",
+    "config/settings.py",
 ]
 
 [[tool.mypy.overrides]]
@@ -57,8 +60,13 @@ module = [
     "django_q.*",
     "litellm.*",
     "youtube_transcript_api.*",
+    "environ",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "config.*"
+follow_imports = "skip"
 
 [tool.django-stubs]
 django_settings_module = "config.settings"
@@ -129,4 +137,5 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-django>=4.11.1",
     "ruff>=0.14.8",
+    "types-psycopg2>=2.9.21",
 ]

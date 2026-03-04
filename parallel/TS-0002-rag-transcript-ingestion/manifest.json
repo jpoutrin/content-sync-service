@@ -1,0 +1,65 @@
+{
+  "tech_spec_id": "TS-0002",
+  "name": "rag-transcript-ingestion",
+  "title": "RAG Transcript Ingestion & Search",
+  "technology": "python",
+  "python_version": "3.12",
+  "dependencies": {
+    "python": {
+      "add": ["sentence-transformers>=2.2.0"],
+      "upgrade": [],
+      "remove": [],
+      "add_dev": []
+    }
+  },
+  "waves": [
+    {
+      "number": 1,
+      "tasks": [
+        { "id": "task-001", "agent": "python-experts:django-expert" },
+        { "id": "task-002", "agent": "python-experts:django-expert" },
+        { "id": "task-003", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "from rag.chunkers.transcript import TranscriptChunker; from rag.embedders.litellm import LiteLLMEmbedder; print('Wave 1 OK')"
+    },
+    {
+      "number": 2,
+      "tasks": [
+        { "id": "task-004", "agent": "python-experts:django-expert" },
+        { "id": "task-005", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "from rag.services.ingestion import IngestionService; from rag.retrievers.default import DefaultRetriever; print('Wave 2 OK')"
+    },
+    {
+      "number": 3,
+      "tasks": [
+        { "id": "task-006", "agent": "python-experts:django-expert" },
+        { "id": "task-007", "agent": "python-experts:django-expert" },
+        { "id": "task-008", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "from rag.api.views import SearchView; print('Wave 3 OK')"
+    },
+    {
+      "number": 4,
+      "tasks": [
+        { "id": "task-009", "agent": "python-experts:django-expert" },
+        { "id": "task-010", "agent": "python-experts:django-expert" }
+      ],
+      "validation": "from yt_sync.signals import auto_ingest_handler; print('Wave 4 OK')"
+    },
+    {
+      "number": 5,
+      "tasks": [
+        { "id": "task-011", "agent": "python-experts:python-testing-expert" }
+      ],
+      "validation": "import pytest; print('Wave 5 OK')"
+    }
+  ],
+  "metadata": {
+    "tech_spec": "tech-specs/approved/TS-0002-rag-transcript-ingestion.md",
+    "generated_at": "2025-12-21T00:00:00Z",
+    "total_tasks": 11,
+    "max_parallel": 3,
+    "critical_path": ["task-001", "task-004", "task-006"]
+  }
+}

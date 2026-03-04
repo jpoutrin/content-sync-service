@@ -1,0 +1,292 @@
+openapi: 3.0.0
+info:
+  title: RAG Transcript Search API
+  version: 1.0.0
+  description: |
+    Semantic search API for indexed video transcripts with ACL enforcement.
+
+    This API provides semantic similarity search across video transcript content,
+    respecting user permissions through Supabase Row-Level Security (RLS) and
+    Django authentication.
+
+    Authentication:
+    - Supabase JWT Bearer token (recommended for frontend)
+    - Django session cookie (for admin/staff)
+
+    Rate Limiting:
+    - 100 requests per minute per user
+    - 1000 requests per hour per user
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.example.com
+    description: Production
+
+paths:
+  /api/rag/search:
+    get:
+      summary: Search transcript content
+      description: |
+        Perform semantic search across indexed video transcripts.
+
+        Results are automatically filtered based on the authenticated user's
+        permissions (ACL enforcement). Only transcripts the user has access
+        to will be returned.
+
+        The search uses vector similarity to find relevant content, not exact
+        keyword matching.
+      operationId: searchTranscripts
+      tags:
+        - Search
+      security:
+        - bearerAuth: []
+        - sessionAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query text (natural language)
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+          example: "How to configure Django settings?"
+
+        - name: top_k
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 5
+          example: 10
+
+        - name: min_score
+          in: query
+          required: false
+          description: Minimum similarity score threshold (0.0-1.0)
+          schema:
+            type: number
+            format: float
+            minimum: 0.0
+            maximum: 1.0
+            default: 0.0
+          example: 0.7
+
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              example:
+                query: "How to configure Django settings?"
+                results:
+                  - chunk_id: "video:42:chunk:5"
+                    content: "To configure Django settings, you need to edit the settings.py file in your project directory. This file contains all the configuration options..."
+                    score: 0.89
+                    video_id: "42"
+                    video_title: "Django Tutorial - Configuration Best Practices"
+                    video_url: "https://example.com/videos/42"
+                    start_time: 125.5
+                    end_time: 185.2
+                    timestamp_url: "https://example.com/videos/42?t=125"
+                  - chunk_id: "video:42:chunk:12"
+                    content: "Another important aspect of Django configuration is managing environment-specific settings using environment variables..."
+                    score: 0.82
+                    video_id: "42"
+                    video_title: "Django Tutorial - Configuration Best Practices"
+                    video_url: "https://example.com/videos/42"
+                    start_time: 420.0
+                    end_time: 465.8
+                    timestamp_url: "https://example.com/videos/42?t=420"
+                total: 2
+
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_query:
+                  summary: Missing query parameter
+                  value:
+                    error: "Query parameter 'q' is required"
+                query_too_long:
+                  summary: Query exceeds max length
+                  value:
+                    error: "Query must be 500 characters or less"
+                invalid_top_k:
+                  summary: Invalid top_k value
+                  value:
+                    error: "top_k must be between 1 and 100"
+                invalid_min_score:
+                  summary: Invalid min_score value
+                  value:
+                    error: "min_score must be between 0.0 and 1.0"
+
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Authentication required. Please provide a valid Bearer token or session cookie."
+
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Rate limit exceeded. Please wait before making more requests."
+
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "An internal error occurred. Please try again later."
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Supabase JWT token obtained from authentication.
+        Include in Authorization header as: `Bearer <token>`
+
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid
+      description: |
+        Django session cookie for admin/staff access.
+        Automatically included by browser after login.
+
+  schemas:
+    SearchResponse:
+      type: object
+      required:
+        - query
+        - results
+        - total
+      properties:
+        query:
+          type: string
+          description: The original search query
+          example: "How to configure Django settings?"
+
+        results:
+          type: array
+          description: List of matching transcript chunks, sorted by score descending
+          items:
+            $ref: '#/components/schemas/SearchResultItem'
+
+        total:
+          type: integer
+          description: Total number of results returned
+          minimum: 0
+          example: 2
+
+    SearchResultItem:
+      type: object
+      required:
+        - chunk_id
+        - content
+        - score
+        - video_id
+        - video_title
+        - video_url
+        - start_time
+        - end_time
+        - timestamp_url
+      properties:
+        chunk_id:
+          type: string
+          description: Unique chunk identifier in format video:{pk}:chunk:{index}
+          pattern: '^video:\d+:chunk:\d+$'
+          example: "video:42:chunk:5"
+
+        content:
+          type: string
+          description: The text content of the transcript chunk
+          example: "To configure Django settings, you need to edit the settings.py file..."
+
+        score:
+          type: number
+          format: float
+          description: Similarity score between query and chunk (0.0-1.0, higher is better)
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.89
+
+        video_id:
+          type: string
+          description: Video primary key as string
+          pattern: '^\d+$'
+          example: "42"
+
+        video_title:
+          type: string
+          description: Title of the source video
+          example: "Django Tutorial - Configuration Best Practices"
+
+        video_url:
+          type: string
+          format: uri
+          description: URL to the video page
+          example: "https://example.com/videos/42"
+
+        start_time:
+          type: number
+          format: float
+          description: Chunk start timestamp in seconds
+          minimum: 0.0
+          example: 125.5
+
+        end_time:
+          type: number
+          format: float
+          description: Chunk end timestamp in seconds
+          minimum: 0.0
+          example: 185.2
+
+        timestamp_url:
+          type: string
+          format: uri
+          description: Direct URL to video at start timestamp (e.g., with ?t=125)
+          example: "https://example.com/videos/42?t=125"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Query parameter 'q' is required"
+
+        details:
+          type: object
+          description: Optional additional error details
+          additionalProperties: true
+          example:
+            field: "q"
+            constraint: "required"
+
+tags:
+  - name: Search
+    description: Semantic search operations
