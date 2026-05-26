@@ -19,6 +19,9 @@ dependencies = [
     "PyJWT>=2.8.0",
     "pgvector>=0.3.0",
     "sentence-transformers>=2.2.0",
+    "langgraph>=0.0.34",
+    "langchain>=0.1.16",
+    "langchain-community>=0.0.32",
 ]
 
 [tool.pytest.ini_options]
